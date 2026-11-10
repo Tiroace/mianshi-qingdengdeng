@@ -53,18 +53,15 @@ export function newRequestId() {
 // 真实网络请求（后端就绪后启用）
 // 返回封套里的 data；失败抛 ApiError
 // 传输层（云托管 callContainer / 普通 uni.request）在 services/transport.js 里选，这里不关心。
-function request(path, method = 'GET', data = null, extraHeader = {}) {
+// 导出给 services/community.js 用（广场接口已按广场下架令挪到单独文件）。
+// 注意：这里**不再有任何社区相关分支**——设备标识由 community.js 通过 extraHeader 自己带，
+// 提审包里因此不会出现 /community/ 字样（自检会硬性核对）。
+export function request(path, method = 'GET', data = null, extraHeader = {}) {
   const headers = {
     'content-type': 'application/json',
     'X-Request-Id': newRequestId(),
     Authorization: getToken() ? 'Bearer ' + getToken() : '',
   };
-
-  // 社区接口带设备标识（D18 防刷）。取不到就不带，后端退回 openid+IP，不能因此报错。
-  if (path.indexOf('/community/') === 0) {
-    const deviceId = getDeviceId();
-    if (deviceId) headers['X-Device-Id'] = deviceId;
-  }
 
   return httpRequest({
     path,
@@ -214,87 +211,9 @@ export function fetchMemberPlans() {
   return request('/plans').then((d) => (d && d.plans) || []);
 }
 
-// ---------- R3 求助广场（docs/10） ----------
-// 全部接口在 FEATURE_COMMUNITY 开关后面：关闭时后端一律 404 NOT_FOUND。
-// 前端据此判断「社区未开放」，把入口整个隐藏，而不是显示「开发中」。
 
-// 判断某个错误是不是「社区未开放」
-export function isCommunityClosed(err) {
-  return !!(err && err.code === 'NOT_FOUND');
-}
-
-// 3.1 GET /community/posts —— 列表：sort=latest/active/voted，q 搜索
-export function fetchPosts({ sort = 'latest', q = '', limit = 20, cursor = '' } = {}) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockListPosts({ sort, q, limit, cursor }));
-  }
-  const qs = [];
-  if (sort) qs.push('sort=' + encodeURIComponent(sort));
-  if (q) qs.push('q=' + encodeURIComponent(q));
-  if (limit) qs.push('limit=' + limit);
-  if (cursor) qs.push('cursor=' + encodeURIComponent(cursor));
-  return request('/community/posts' + (qs.length ? '?' + qs.join('&') : ''));
-}
-
-// 3.1 GET /community/posts/{id} —— 详情
-export function fetchPostDetail(postId) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockPostDetail(postId));
-  }
-  return request('/community/posts/' + encodeURIComponent(postId));
-}
-
-// 3.1 POST /community/posts —— 发帖（先审后发）
-export function createPost(payload) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockCreatePost(payload));
-  }
-  return request('/community/posts', 'POST', payload);
-}
-
-// 3.1 POST /community/posts/{id}/vote —— 投票 value: 1/-1/0（0=取消）
-export function votePost(postId, value, reason) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockVote(postId, value, reason));
-  }
-  return request('/community/posts/' + encodeURIComponent(postId) + '/vote', 'POST', {
-    value,
-    reason: reason || '',
-  });
-}
-
-// 3.1 GET /community/posts/{id}/experiences
-export function fetchExperiences(postId) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockExperiences(postId));
-  }
-  return request('/community/posts/' + encodeURIComponent(postId) + '/experiences');
-}
-
-// 3.1 POST /community/posts/{id}/experiences —— 补充经历（先审后发）
-export function createExperience(postId, content) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockCreateExperience(postId, content));
-  }
-  return request('/community/posts/' + encodeURIComponent(postId) + '/experiences', 'POST', { content });
-}
-
-// 3.1 POST /community/posts/{id}/report —— 举报
-export function reportPost(postId, reason) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockReport(postId, reason));
-  }
-  return request('/community/posts/' + encodeURIComponent(postId) + '/report', 'POST', { reason: reason || '' });
-}
-
-// 3.1 POST /community/appeals —— 企业申诉
-export function createAppeal(payload) {
-  if (useMock()) {
-    return import('@/services/communityMock.js').then((m) => m.mockAppeal(payload));
-  }
-  return request('/community/appeals', 'POST', payload);
-}
-
+// 求助广场的接口已整体挪到 services/community.js（广场下架令 2026-11-10），
+// 这里不再导出，提审包里因此不会出现 /community/ 与广场相关字样。
 export default {
   loginByCode,
   fetchMe,
@@ -306,15 +225,6 @@ export default {
   createOrder,
   submitFeedback,
   fetchMemberPlans,
-  fetchPosts,
-  fetchPostDetail,
-  createPost,
-  votePost,
-  fetchExperiences,
-  createExperience,
-  reportPost,
-  createAppeal,
-  isCommunityClosed,
   getToken,
   setToken,
   clearToken,

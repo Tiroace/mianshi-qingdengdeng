@@ -160,10 +160,41 @@ if (appJson) {
     paths.length === 2 && paths.includes('pages/index/index') && paths.includes('pages/mine/index') && !paths.includes('pages/square/index')
       ? ok('提审包 tabBar 只有 2 项：检查、我的（' + texts.join('、') + '）')
       : bad('提审包 tabBar 不对：' + JSON.stringify(paths));
-    !uiHits.includes('app.json') && !uiHits.some((h) => h.startsWith('pages/index/') || h.startsWith('pages/mine/') || h === 'app.json')
-      ? ok('提审包首页/我的/tabBar 无「广场」字样')
-      : bad('提审包界面仍出现「广场」：' + uiHits.join(', '));
-    !squarePacked ? ok('提审包无广场页面') : console.log('  （提示）提审包内仍保留 pages/square 页面文件，仅入口不可达');
+
+    // ---------- 6c. 广场下架令（2026-11-10）：完整移除，不再是「提示」 ----------
+    // 1.0.7 被驳回就是因为这里只打印提示、不报错。审核看整个代码包，不看入口能否点到。
+    const SQUARE_PAGES = ['pages/square/index', 'pages/post/index', 'pages/post-create/index'];
+    const SQUARE_DIRS = ['pages/square', 'pages/post', 'pages/post-create'];
+
+    // (1) app.json 的 pages 里不能出现这三页
+    const packedSquare = SQUARE_PAGES.filter((p) => (appJson.pages || []).includes(p));
+    packedSquare.length === 0
+      ? ok('【广场下架】app.json 无广场/发帖三页')
+      : bad('【广场下架】app.json 仍登记：' + packedSquare.join(', '));
+
+    // (2) 产物目录里不能有这三页的目录
+    const leftDirs = SQUARE_DIRS.filter((d) => fs.existsSync(path.join(DIST, d)));
+    leftDirs.length === 0
+      ? ok('【广场下架】产物无 pages/square、pages/post、pages/post-create 目录')
+      : bad('【广场下架】产物仍有目录：' + leftDirs.join(', '));
+
+    // (3) 全包搜索这些词，必须为 0
+    const BANNED = ['/community/', '求助广场', '发起求助', '求助详情', '大家的经历', '建议去', '不建议去'];
+    const bannedHits = [];
+    for (const w of BANNED) {
+      const f = allFiles.find((file) => {
+        if (!/\.(js|json|wxml|wxss)$/.test(file)) return false;
+        try {
+          return fs.readFileSync(file, 'utf8').indexOf(w) >= 0;
+        } catch (e) {
+          return false;
+        }
+      });
+      if (f) bannedHits.push(w + ' → ' + path.relative(DIST, f));
+    }
+    bannedHits.length === 0
+      ? ok('【广场下架】全包无 ' + BANNED.length + ' 个禁用词（/community/、求助广场 等）')
+      : bad('【广场下架】全包仍有禁用词：' + bannedHits.join('；'));
   } else {
     paths.includes('pages/square/index')
       ? ok('开发包 tabBar 保留广场（3 项：' + texts.join('、') + '）')

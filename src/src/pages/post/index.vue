@@ -146,6 +146,7 @@
 import { ref, computed, onMounted } from 'vue';
 import NavBar from '@/components/NavBar.vue';
 import SignalLamp from '@/components/SignalLamp.vue';
+// 广场（社区）接口单独放在 community.js（广场下架令 2026-11-10）
 import {
   fetchPostDetail,
   fetchExperiences,
@@ -154,7 +155,7 @@ import {
   reportPost,
   createAppeal,
   isCommunityClosed,
-} from '@/services/api.js';
+} from '@/services/community.js';
 
 defineOptions({ name: 'PostDetailPage' });
 

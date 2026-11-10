@@ -85,7 +85,9 @@
 import { ref, computed, onMounted } from 'vue';
 import NavBar from '@/components/NavBar.vue';
 import SignalLamp from '@/components/SignalLamp.vue';
-import { fetchPosts } from '@/services/api.js';
+// 广场（社区）接口单独放在 community.js：本页与 pages/post、pages/post-create
+// 是唯一引用者，提审包会在编译前删掉这三个页面，因此社区代码不会进提审包。
+import { fetchPosts } from '@/services/community.js';
 import { probeCommunity } from '@/common/features.js';
 
 defineOptions({ name: 'SquarePage' });

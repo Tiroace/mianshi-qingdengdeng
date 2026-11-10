@@ -50,18 +50,44 @@ const steps = [
 ]
   .concat(stripUpload)
   .concat([[process.execPath, ['scripts/postbuild-check.mjs', 'dist/build/mp-weixin'].concat(extra)]]);
-for (const [cmd, args] of steps) {
-  // eslint-disable-next-line no-await-in-loop
+
+// 提审包必须在**编译前**就删掉广场三页（广场下架令 2026-11-10）：审核看整个代码包，
+// 只在产物里删目录不够，公共 JS 里仍会残留引用。编译完无论成败都恢复原 pages.json。
+function run(cmd, args) {
   const r = spawnSync(cmd, args, { stdio: 'inherit', env, shell: false });
   if (r.error) {
     console.error('[FAIL] ' + cmd + ' 启动失败：' + r.error.message);
-    process.exit(1);
+    return 1;
   }
   if (r.status !== 0) {
     console.error('[FAIL] 步骤失败：' + args.join(' ') + '（退出码 ' + r.status + '）');
-    process.exit(r.status || 1);
+    return r.status || 1;
+  }
+  return 0;
+}
+
+let failed = false;
+if (IS_REVIEW) {
+  // 第一步就把 pages.json 换成不含广场的版本，最后一步再恢复
+  const prep = run(process.execPath, ['scripts/prepare-review-pages.mjs', 'prepare']);
+  if (prep !== 0) process.exit(prep);
+}
+try {
+  for (const [cmd, args] of steps) {
+    const code = run(cmd, args);
+    if (code !== 0) {
+      failed = true;
+      process.exitCode = code;
+      break;
+    }
+  }
+} finally {
+  if (IS_REVIEW) {
+    // 不管构建成功、失败还是抛错，都把源码 pages.json 恢复回去
+    run(process.execPath, ['scripts/prepare-review-pages.mjs', 'restore']);
   }
 }
+if (failed) process.exit(process.exitCode || 1);
 
 // 规则版必须跑产物自检；失败就红，不许带着 deepseek 字样去提审
 if (engine === 'rules') {

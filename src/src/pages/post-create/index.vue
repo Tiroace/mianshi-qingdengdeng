@@ -101,7 +101,9 @@
 import { ref, computed, onMounted } from 'vue';
 import NavBar from '@/components/NavBar.vue';
 import SignalLamp from '@/components/SignalLamp.vue';
-import { fetchReports, createPost, isCommunityClosed } from '@/services/api.js';
+// createPost / isCommunityClosed 来自 community.js；fetchReports 仍走 api.js
+import { fetchReports } from '@/services/api.js';
+import { createPost, isCommunityClosed } from '@/services/community.js';
 import { SWITCH_COLOR } from '@/common/brand.js';
 
 defineOptions({ name: 'PostCreatePage' });

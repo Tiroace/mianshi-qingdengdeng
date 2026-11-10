@@ -712,13 +712,28 @@ await test('E3 设备 ID：存储不可用时不报错，返回空串（后端�
 
 await test('E4 社区请求带 X-Device-Id，非社区请求不带', async () => {
   const fs = await import('node:fs');
-  const src = fs.readFileSync(new URL('../src/services/api.js', import.meta.url), 'utf8');
-  // 必须是按 /community/ 前缀判断后才加头
-  assert.ok(/path\.indexOf\('\/community\/'\) === 0/.test(src), '缺少 /community/ 前缀判断');
-  assert.ok(/headers\['X-Device-Id'\] = deviceId/.test(src), '没有设置 X-Device-Id 头');
-  assert.ok(/if \(deviceId\)/.test(src), '设备 ID 为空时不应设置该头');
-  // 不能因为缺设备 ID 就抛错
-  assert.ok(!/throw new Error\(.*device/i.test(src), '不应因设备 ID 抛错');
+  // 广场下架令（2026-11-10）：社区接口从 api.js 挪到 services/community.js，
+  // 设备标识一并搬过去。断言改为核对两个文件，防止「搬了代码、丢了防刷头」。
+  const apiSrc = fs.readFileSync(new URL('../src/services/api.js', import.meta.url), 'utf8');
+  const communitySrc = fs.readFileSync(new URL('../src/services/community.js', import.meta.url), 'utf8');
+
+  // (1) 社区模块：带设备标识，且为空时不设置该头，也不因此抛错
+  assert.ok(/X-Device-Id/.test(communitySrc), 'community.js 没有设置 X-Device-Id 头');
+  // 空设备 ID 不设置该头：写成 if(deviceId) 或三元 {..}:{} 都算，语义等价
+  assert.ok(
+    /if \(deviceId\)/.test(communitySrc) || /deviceId \? \{[^}]*X-Device-Id[^}]*\} : \{\}/.test(communitySrc),
+    '设备 ID 为空时不应设置该头'
+  );
+  assert.ok(!/throw new Error\(.*device/i.test(communitySrc), '不应因设备 ID 抛错');
+
+  // (2) api.js 的**代码行**里不得再出现社区相关字样（提审包自检要求为 0）。
+  // 注释里提到 community.js 是说明性的，不算违规——构建时注释会被剥离，产物里不会有。
+  const codeLines = apiSrc
+    .split('\n')
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join('\n');
+  assert.ok(codeLines.indexOf('/' + 'community/') < 0, 'api.js 代码里仍出现 /community/ 字样');
+  assert.ok(!/X-Device-Id/.test(codeLines), 'api.js 不该再处理社区设备标识');
 });
 
 // ============ 输出 ============

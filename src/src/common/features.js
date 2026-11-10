@@ -3,7 +3,8 @@
 // 社区按 D14 默认关闭：后端 `QBL_FEATURE_COMMUNITY=0` 时所有 /community/* 返回 404。
 // 前端策略是「入口整个隐藏」，不是显示「开发中」——所以这里不写死开关，
 // 而是以「探测后端是否开放」为准，避免两边开关不一致导致露出入口却点进去 404。
-import { fetchPosts, isCommunityClosed } from '@/services/api.js';
+// 本文件只被 pages/square 引用；社区接口按广场下架令挪到了 services/community.js。
+import { fetchPosts, isCommunityClosed } from '@/services/community.js';
 
 // 运行内缓存：探测一次就复用，避免每个页面都打一次接口
 let cached = null;
