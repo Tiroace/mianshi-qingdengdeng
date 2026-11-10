@@ -2,7 +2,8 @@
   <view class="page">
     <NavBar title="检查中" />
 
-    <!-- 三灯：全产品唯一的动画（任务书 §6.2） -->
+    <!-- 坑坑在上面，三灯在下面轮流亮（全产品唯一的动画，任务书 §6.2） -->
+    <image class="ana-mascot" src="/static/mascot/kengkeng-hi.png" mode="aspectFit" />
     <view class="lamp-box">
       <view class="lamp-row">
         <view class="lamp-slot" :class="{ lit: litIndex === 0 }">
@@ -34,6 +35,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import NavBar from '@/components/NavBar.vue';
+import { VISION_ENGINE } from '@/common/config.js';
 import { fetchAnalysis, ApiError } from '@/services/api.js';
 import { refreshUser } from '@/services/session.js';
 import { DISCLAIMER_TEXT } from '@/common/constants.js';
@@ -167,7 +169,7 @@ onMounted(() => {
   if (!taskId.value) {
     uni.showModal({
       title: '没有检查任务',
-      content: '请先回首页上传截图。',
+      content: VISION_ENGINE ? '请先回首页上传截图。' : '请先回首页粘贴招聘文字。',
       showCancel: false,
       success: () => uni.switchTab({ url: '/pages/index/index' }),
     });
@@ -194,12 +196,17 @@ function goHome() {
 }
 
 // 三灯在底座上
+.ana-mascot {
+  margin-top: 96rpx;
+  width: 260rpx;
+  height: 260rpx;
+}
+
 .lamp-box {
-  margin-top: 190rpx;
-  background-color: $housing;
-  border: 2rpx solid $line;
-  border-radius: 46rpx;
-  padding: 60rpx 50rpx;
+  margin-top: 23rpx;
+  background-color: $surface;
+  border-radius: 999rpx;
+  padding: 23rpx 46rpx;
 }
 
 .lamp-row {
@@ -209,8 +216,8 @@ function goHome() {
 }
 
 .lamp-slot {
-  width: 120rpx;
-  height: 120rpx;
+  width: 84rpx;
+  height: 84rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -218,7 +225,7 @@ function goHome() {
   opacity: 0.28;
 
   & + & {
-    margin-left: 40rpx;
+    margin-left: 27rpx;
   }
 
   &.lit {
@@ -227,8 +234,8 @@ function goHome() {
 }
 
 .lamp-dot {
-  width: 85rpx;
-  height: 85rpx;
+  width: 54rpx;
+  height: 54rpx;
   border-radius: 50%;
 
   &.red {
@@ -254,7 +261,7 @@ function goHome() {
 }
 
 .stage {
-  margin-top: 77rpx;
+  margin-top: 54rpx;
   font-size: 46rpx;
   font-weight: 900;
   color: $ink;

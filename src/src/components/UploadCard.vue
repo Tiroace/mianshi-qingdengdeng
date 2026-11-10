@@ -86,7 +86,7 @@ function onTapCard() {
 
 // 整张卡都能点，虚线框
 .upload-card {
-  border: 3rpx dashed $off;
+  border: 4rpx dashed $brand-line;
 }
 .upload-dashed {
   display: block;
@@ -225,8 +225,10 @@ function onTapCard() {
 .btn-primary {
   margin-top: 31rpx;
   height: $btn-h;
-  border-radius: $radius-btn;
-  background-color: $amber;
+  border-radius: 35rpx;
+  background-color: $cta;
+  box-shadow: 0 10rpx 0 $cta-deep;
+  margin-bottom: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;

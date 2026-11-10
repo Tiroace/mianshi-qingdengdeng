@@ -4,8 +4,14 @@
     <NavBar brand />
 
     <view class="main">
-      <text class="hero-title">去面试之前，{{ '\n' }}先让我看一眼</text>
-      <text class="hero-sub">{{ VISION_ENGINE ? '招聘截图发过来，30 秒告诉你这份工作有没有坑。' : '把招聘信息粘贴过来，马上告诉你这份工作有没有坑。' }}</text>
+      <!-- 首屏：坑坑（土拨鼠）+ 大标题。老板 2026-11-11 选定风格 A + 坑坑 -->
+      <view class="hero">
+        <image class="hero-mascot" src="/static/mascot/kengkeng-hi.png" mode="aspectFit" />
+        <view class="hero-text">
+          <text class="hero-title">去面试之前，{{ '\n' }}先让我看一眼</text>
+          <text class="hero-sub">{{ VISION_ENGINE ? '招聘截图发过来，我帮你找坑。' : '把招聘信息贴过来，我帮你找坑。' }}</text>
+        </view>
+      </view>
 
       <!-- 规则版（提审用）：粘贴卡（双版本令第二节第 2 条）。
            全部在手机上跑，不做手机认字，所以主操作是「粘贴文字」而不是上传截图。 -->
@@ -36,7 +42,7 @@
         </view>
 
         <view class="up-meta">
-          <text v-if="isUnlimited">内测期间不限次数</text>
+          <text v-if="isUnlimited">现在免费，不限次数</text>
           <text v-else>还能免费查 <text class="up-meta-num">{{ balance }}</text> 次</text>
           <text>岗位介绍和 HR 聊天一起贴，查得更准</text>
         </view>
@@ -72,17 +78,17 @@
       <text class="h2">每份报告，逐项给你亮灯</text>
       <view class="signal">
         <view class="signal-item">
-          <SignalLamp level="red" size="lg" />
+          <image class="signal-mascot" src="/static/mascot/kengkeng-red.png" mode="aspectFit" />
           <text class="signal-n">红灯</text>
           <text class="signal-d">建议别去</text>
         </view>
         <view class="signal-item">
-          <SignalLamp level="amber" size="lg" />
+          <image class="signal-mascot" src="/static/mascot/kengkeng-amber.png" mode="aspectFit" />
           <text class="signal-n">黄灯</text>
           <text class="signal-d">先问清楚再去</text>
         </view>
         <view class="signal-item">
-          <SignalLamp level="green" size="lg" />
+          <image class="signal-mascot" src="/static/mascot/kengkeng-green.png" mode="aspectFit" />
           <text class="signal-n">绿灯</text>
           <text class="signal-d">这一项没问题</text>
         </view>
@@ -612,10 +618,29 @@ function gotoAiDoc() {
   flex-direction: column;
 }
 
+.hero {
+  margin-top: 31rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.hero-mascot {
+  width: 184rpx;
+  height: 184rpx;
+  margin-right: 23rpx;
+  flex-shrink: 0;
+}
+
+.hero-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .hero-title {
-  margin-top: 54rpx;
-  font-size: 65rpx;
-  line-height: 1.24;
+  font-size: 52rpx;
+  line-height: 1.26;
   font-weight: 900;
   color: $ink;
   letter-spacing: -1rpx;
@@ -623,8 +648,8 @@ function gotoAiDoc() {
 }
 
 .hero-sub {
-  margin-top: 23rpx;
-  font-size: 29rpx;
+  margin-top: 12rpx;
+  font-size: 26rpx;
   line-height: 1.6;
   color: $ink-2;
 }
@@ -635,7 +660,7 @@ function gotoAiDoc() {
 }
 
 .upload {
-  margin-top: 46rpx;
+  margin-top: 31rpx;
   border-radius: 46rpx;
   padding: 38rpx;
 }
@@ -674,7 +699,7 @@ function gotoAiDoc() {
 
 // 粘贴卡（规则版首页，双版本令第二节第 2 条）：样式与上传卡保持一致
 .paste-card {
-  border: 3rpx dashed $off;
+  border: 4rpx dashed $brand-line;
 }
 .paste-input {
   width: 100%;
@@ -682,8 +707,8 @@ function gotoAiDoc() {
   font-size: 29rpx;
   line-height: 1.6;
   color: $ink;
-  background: $surface-2;
-  border-radius: $radius-sm;
+  background: $bg;
+  border-radius: 27rpx;
   padding: 23rpx;
   box-sizing: border-box;
 }
@@ -698,11 +723,12 @@ function gotoAiDoc() {
   margin-top: 19rpx;
 }
 .paste-btn {
-  padding: 13rpx 27rpx;
-  border-radius: $radius-tag;
-  border: 2rpx solid $off;
+  padding: 15rpx 31rpx;
+  border-radius: 999rpx;
+  background-color: $ink;
   font-size: 25rpx;
-  color: $ink-3;
+  font-weight: 700;
+  color: $cta;
 }
 .paste-count {
   flex: 1;
@@ -725,7 +751,8 @@ function gotoAiDoc() {
 }
 // 主按钮灰掉态：没内容时不可点，视觉上要能一眼看出
 .btn-primary-disabled {
-  opacity: 0.45;
+  opacity: 0.5;
+  box-shadow: none !important;
 }
 
 // 插画区：设计稿 128 高 → 246rpx
@@ -866,8 +893,10 @@ function gotoAiDoc() {
   width: 100%;
   height: 108rpx;
   margin-top: 31rpx;
-  border-radius: 31rpx;
+  border-radius: 35rpx;
   background-color: $cta;
+  box-shadow: 0 10rpx 0 $cta-deep;
+  margin-bottom: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -995,10 +1024,9 @@ function gotoAiDoc() {
 
 // 信号灯说明卡：底座 $housing
 .signal {
-  background-color: $housing;
-  border: 2rpx solid $line;
+  background-color: $surface;
   border-radius: 46rpx;
-  padding: 42rpx 23rpx 38rpx;
+  padding: 31rpx 15rpx 35rpx;
   display: flex;
   flex-direction: row;
 }
@@ -1010,17 +1038,22 @@ function gotoAiDoc() {
   align-items: center;
 }
 
+.signal-mascot {
+  width: 150rpx;
+  height: 150rpx;
+}
+
 .signal-n {
-  margin-top: 27rpx;
+  margin-top: 12rpx;
   font-size: 29rpx;
   font-weight: 800;
-  color: $housing-ink;
+  color: $ink;
 }
 
 .signal-d {
   margin-top: 4rpx;
   font-size: 23rpx;
-  color: $housing-ink-2;
+  color: $ink-2;
 }
 
 // 列表卡

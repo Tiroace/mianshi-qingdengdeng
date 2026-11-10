@@ -66,6 +66,8 @@ for (const f of files.filter((x) => x.endsWith('.vue'))) {
     if (!/box-shadow/.test(line)) return;
     // 允许：灯的发光。判定标准是值里出现灯色变量（$red/$amber/$green）
     if (/\$(red|amber|green)(-soft)?\b/.test(line)) return;
+    // 允许：主按钮底下那道深黄（$cta-deep，做出「按得下去」的厚度；2026-11-11 浅色版加的），以及取消阴影
+    if (/\$cta-deep\b/.test(line) || /box-shadow:\s*none/.test(line)) return;
     shadowHits.push(path.relative(SRC, f) + ':' + (i + 1) + ' ' + line.trim());
   });
 }
@@ -83,15 +85,15 @@ emojiHits.length ? fail('使用了 emoji', emojiHits.join(', ')) : pass('emoji =
 const brand = fs.readFileSync(path.join(SRC, 'common/brand.js'), 'utf8');
 brand.includes('APP_NAME = \'面试请等等\'') ? pass('APP_NAME = 面试请等等') : fail('APP_NAME 未改名');
 
-// 7. pages.json 深色配置
+// 7. pages.json 页面底色配置（2026-11-11 起改为浅色「奶油小黄灯」：底 #FFF6D6、导航栏深色字）
 const pages = JSON.parse(fs.readFileSync(path.join(SRC, 'pages.json'), 'utf8'));
-const darkBg = (pages.pages || []).every((p) => (p.style || {}).backgroundColor === '#0E1620');
-darkBg ? pass('每页 backgroundColor = #0E1620') : fail('有页面没设深色背景');
-const whiteText = (pages.pages || []).every((p) => (p.style || {}).navigationBarTextStyle === 'white');
-whiteText ? pass('每页 navigationBarTextStyle = white') : fail('有页面导航栏文字不是白色');
+const darkBg = (pages.pages || []).every((p) => (p.style || {}).backgroundColor === '#FFF6D6');
+darkBg ? pass('每页 backgroundColor = #FFF6D6') : fail('有页面没设页面底色 #FFF6D6');
+const whiteText = (pages.pages || []).every((p) => (p.style || {}).navigationBarTextStyle === 'black');
+whiteText ? pass('每页 navigationBarTextStyle = black') : fail('有页面导航栏文字不是深色');
 const tb = pages.tabBar || {};
-const tbOk = tb.backgroundColor === '#121C27' && tb.color === '#8090A0' && tb.selectedColor === '#FFC93C';
-tbOk ? pass('tabBar 配色 #121C27 / #8090A0 / #FFC93C') : fail('tabBar 配色不对：' + JSON.stringify(tb));
+const tbOk = tb.backgroundColor === '#FFFFFF' && tb.color === '#8A7A62' && tb.selectedColor === '#2B2118';
+tbOk ? pass('tabBar 配色 #FFFFFF / #8A7A62 / #2B2118') : fail('tabBar 配色不对：' + JSON.stringify(tb));
 
 // 8. tabBar 图标存在且 81×81
 const iconOk = (tb.list || []).every((t) => {

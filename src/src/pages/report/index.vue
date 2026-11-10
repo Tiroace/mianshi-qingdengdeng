@@ -18,12 +18,9 @@
 
       <!-- ② 结论区：三种灯 + 标题 + 副标题 -->
       <view class="verdict" :class="'verdict-' + overall">
-        <view class="pole">
-          <view class="pole-lamp" :class="{ on: overall === 'red' }"></view>
-          <view class="pole-lamp" :class="{ on: overall === 'amber' }"></view>
-          <view class="pole-lamp" :class="{ on: overall === 'green' }"></view>
-        </view>
+        <image class="verdict-mascot" :src="mascotSrc" mode="aspectFit" />
         <view class="verdict-text">
+          <view class="verdict-pill" :class="'verdict-pill-' + overall"><text>{{ verdictPill }}</text></view>
           <text class="verdict-title">{{ verdictTitle }}</text>
           <text class="verdict-sub">{{ verdictSub }}</text>
         </view>
@@ -96,21 +93,22 @@
       <!-- ⑥ 面试前问 HR：命中套路带出来的问题排最前并标注来源，固定追问折叠 -->
       <text class="h2">{{ questionTitle }}</text>
       <view class="card qlist">
-        <view v-for="(q, idx) in hitQuestions" :key="'h' + idx" class="q-item">
+        <view v-for="(q, idx) in hitQuestions" :key="'h' + idx" class="q-item" @tap="copyOne(q.text)">
           <view class="q-index"><text class="q-num">{{ idx + 1 }}</text></view>
           <view class="q-body">
             <text class="q-text t2">{{ q.text }}</text>
             <text v-if="q.source" class="q-from">（对应：{{ q.source }}）</text>
           </view>
         </view>
-        <view v-for="(q, idx) in shownGreyQuestions" :key="'g' + idx" class="q-item">
+        <view v-for="(q, idx) in shownGreyQuestions" :key="'g' + idx" class="q-item" @tap="copyOne(q.text)">
           <view class="q-index q-index-grey"><text class="q-num">{{ hitQuestions.length + idx + 1 }}</text></view>
           <text class="q-text t2">{{ q.text }}</text>
         </view>
         <view v-if="hiddenQuestionCount && !showMoreQuestions" class="q-more" @tap="showMoreQuestions = true">
           <text class="q-more-t">更多问题（还有 {{ hiddenQuestionCount }} 条）</text>
         </view>
-        <view class="btn-copy" @tap="copyQuestions"><text>复制</text></view>
+        <text class="q-hint">点一下某个问题，就能单独复制</text>
+        <view class="btn-copy" @tap="copyQuestions"><text>全部复制，去问 HR</text></view>
       </view>
 
       <!-- ⑦ 自己也能核实：固定条目合并成一张小卡，放报告靠后，用小字 -->
@@ -212,6 +210,7 @@ import {
   EMPTY_FINDINGS,
   EMPTY_FINDINGS_UNKNOWN,
   CORP_SOURCE_TAG,
+  IS_IMAGE,
 } from '@/common/reportCopy.js';
 
 defineOptions({
@@ -264,6 +263,16 @@ const overall = computed(() => {
 });
 
 const verdictTitle = computed(() => VERDICT_TITLE[overall.value]);
+// 结论区的坑坑表情和小标签：红=吓一跳举牌，黄=冒汗，绿=开心，信息不够=问号
+const MASCOT = {
+  red: '/static/mascot/kengkeng-red.png',
+  amber: '/static/mascot/kengkeng-amber.png',
+  green: '/static/mascot/kengkeng-green.png',
+  unknown: '/static/mascot/kengkeng-unknown.png',
+};
+const VERDICT_PILL = { red: '红灯', amber: '黄灯', green: '绿灯', unknown: '信息不够' };
+const mascotSrc = computed(() => MASCOT[overall.value] || MASCOT.unknown);
+const verdictPill = computed(() => VERDICT_PILL[overall.value] || VERDICT_PILL.unknown);
 const overallCls = computed(() => overall.value);
 
 // 绿灯的发现默认收起，只显示「另有 N 项看起来正常」（同上第 2 条）
@@ -285,7 +294,12 @@ const bannerLevel = computed(() => (overall.value === 'red' ? 'red' : 'amber'));
 const bannerVisible = computed(() => {
   const m = reportMeta.value;
   if (!m || !m.scheme || !m.scheme.title) return false;
-  return overall.value === 'red' || overall.value === 'amber';
+  // 「看起来正常」（S-00）不是套路：黄灯时再显示它，会出现「没看出明显问题」和「要问清楚」同时出现
+  if (m.scheme_id === 'S-00' || m.scheme.scheme_id === 'S-00' || m.scheme.level === 'green') return false;
+  // 规则版的整体套路是按命中维度粗略对出来的，黄灯时说得比证据重（例如只写了「薪资面议」却显示「没底薪靠提成」），
+  // 所以规则版只在红灯时显示横幅；识图版由模型给出把握度，黄灯照旧显示。
+  if (overall.value === 'amber') return IS_IMAGE;
+  return overall.value === 'red';
 });
 const bannerTitle = computed(() => {
   const m = reportMeta.value || {};
@@ -547,6 +561,18 @@ function copyQuestions() {
   });
 }
 
+// 单条复制：灰色追问形如「文字里没提到「X」，可以问 HR：……」，只复制冒号后面能直接发出去的那句
+function copyOne(text) {
+  const raw = String(text || '');
+  const cut = raw.indexOf('可以问 HR：');
+  const data = cut >= 0 ? raw.slice(cut + '可以问 HR：'.length) : raw;
+  if (!data) return;
+  uni.setClipboardData({
+    data,
+    success: () => uni.showToast({ title: '已复制这一句', icon: 'none' }),
+  });
+}
+
 function callPhone(num) {
   uni.makePhoneCall({
     phoneNumber: num,
@@ -672,7 +698,13 @@ function onShare() {
 }
 
 .scheme-banner-amber {
-  background-color: $amber;
+  background-color: $amber-fill;
+
+  .scheme-title,
+  .scheme-verdict,
+  .scheme-harm {
+    color: $ink;
+  }
 }
 
 .scheme-title {
@@ -714,8 +746,8 @@ function onShare() {
 }
 
 .verdict-amber {
-  background-color: $amber-soft;
-  border-color: $amber-soft;
+  background-color: $amber-fill;
+  border-color: $amber-fill;
 }
 
 .verdict-green {
@@ -727,48 +759,26 @@ function onShare() {
   background-color: $surface;
 }
 
-// 竖排三灯
-.pole {
-  width: 96rpx;
-  padding: 19rpx 0;
-  border-radius: 48rpx;
-  background-color: $housing;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-right: 35rpx;
+// 结论区的坑坑：76px 设计稿 → 146rpx
+.verdict-mascot {
+  width: 150rpx;
+  height: 150rpx;
+  margin-right: 27rpx;
   flex-shrink: 0;
 }
 
-.pole-lamp {
-  width: 58rpx;
-  height: 58rpx;
-  border-radius: 50%;
-  background-color: $off;
-  opacity: 0.4;
+.verdict-pill {
+  align-self: flex-start;
+  padding: 4rpx 19rpx;
+  border-radius: 999rpx;
+  background-color: $ink;
+  margin-bottom: 12rpx;
 
-  & + & {
-    margin-top: 15rpx;
+  text {
+    font-size: 23rpx;
+    font-weight: 700;
+    color: $cta;
   }
-
-  &.on {
-    opacity: 1;
-  }
-}
-
-.pole-lamp:nth-child(1).on {
-  background-color: $red;
-  box-shadow: 0 0 30rpx $red;
-}
-
-.pole-lamp:nth-child(2).on {
-  background-color: $amber;
-  box-shadow: 0 0 30rpx $amber;
-}
-
-.pole-lamp:nth-child(3).on {
-  background-color: $green;
-  box-shadow: 0 0 30rpx $green;
 }
 
 .verdict-text {
@@ -1117,7 +1127,21 @@ function onShare() {
 .q-item {
   display: flex;
   flex-direction: row;
-  margin-top: 23rpx;
+  margin-top: 15rpx;
+  padding: 19rpx 23rpx;
+  border-radius: 31rpx 31rpx 31rpx 8rpx;
+  background-color: $bg;
+
+  &:active {
+    background-color: $surface-2;
+  }
+}
+
+.q-hint {
+  display: block;
+  margin-top: 19rpx;
+  font-size: 23rpx;
+  color: $ink-2;
 }
 
 .q-index {
@@ -1147,10 +1171,10 @@ function onShare() {
 }
 
 .btn-copy {
-  margin-top: 31rpx;
+  margin-top: 19rpx;
   height: 85rpx;
-  border-radius: 27rpx;
-  border: 3rpx solid $outline;
+  border-radius: 999rpx;
+  background-color: $ink;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1158,7 +1182,7 @@ function onShare() {
   text {
     font-size: 29rpx;
     font-weight: 700;
-    color: $ink;
+    color: $cta;
   }
 }
 
@@ -1446,6 +1470,8 @@ function onShare() {
   height: 100rpx;
   border-radius: 31rpx;
   background-color: $cta;
+  box-shadow: 0 8rpx 0 $cta-deep;
+  margin-bottom: 8rpx;
   display: flex;
   align-items: center;
   justify-content: center;

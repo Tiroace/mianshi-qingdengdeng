@@ -128,6 +128,41 @@ check('招聘关键词判定：有岗位/薪资/面试等字样才算招聘', ()
   assert.strictEqual(isRecruitText('今天天气不错，我去公园走了一圈，看到了很多花和树，心情很好'), false);
 });
 
+// ---- 2026-11-11 老板实测出的误判，补成回归用例 ----
+const HEAD = '某某公司招聘，工作时间早九晚六，周末双休。';
+check('否定说法不算收费：「入职不收取任何费用」「免押金」「无需交任何押金」', () => {
+  for (const t of ['招聘销售 月薪面议 入职不收取任何费用', '招聘收银员 月薪4500 负责收银和交接班，免押金入职',
+    '招聘普工 月薪6000 免费提供工作服，无需交任何押金', '招聘文员 月薪5000 公司承诺不收押金、不收服装费',
+    '招聘客服 月薪4500 培训期间不收培训费，包吃住']) {
+    const r = buildRuleReport(HEAD + t).report;
+    assert.ok(!r.findings.some((f) => f.rule_id === 'R-FEE-01'), '误判收费：' + t);
+  }
+});
+check('真收费照样抓：「需交押金」「押金入职时缴纳」「服装费自理」「工装费从工资里扣」', () => {
+  for (const t of ['招聘普工 月薪6000 学历不限，需交押金500', '招聘司机 月薪8000 押金2000元入职时缴纳',
+    '招聘保洁 月薪4000 服装费自理', '招聘操作工 月薪7000 工装费从第一个月工资里扣']) {
+    const r = buildRuleReport(HEAD + t).report;
+    assert.ok(r.findings.some((f) => f.rule_id === 'R-FEE-01'), '漏判收费：' + t);
+  }
+});
+check('「交」「收」单字不能单独触发收费（例如「负责收发文件和付款登记」）', () => {
+  const r = buildRuleReport(HEAD + '招聘文员 月薪5000 交通便利 负责收发文件和付款登记').report;
+  assert.ok(!r.findings.some((f) => f.rule_id === 'R-FEE-01'), '单字误判');
+});
+check('「微信视频号」不是「只留个人微信」', () => {
+  const t = '招聘新媒体运营\n1.拍摄抖音、微信视频号等短视频内容进行引流\n月薪6000-8000元';
+  const r = buildRuleReport(t).report;
+  const f = r.findings.find((x) => x.rule_id === 'R-COMPANY-A01');
+  assert.ok(!f, '把视频号当成个人微信了');
+  const t2 = t + '\n有意向的加我微信详聊';
+  const f2 = buildRuleReport(t2).report.findings.find((x) => x.rule_id === 'R-COMPANY-A01');
+  assert.ok(f2 && f2.evidence.indexOf('加我微信') >= 0, '证据没指到「加我微信」那句：' + (f2 && f2.evidence));
+});
+check('要露脸出镜 + 引流 → 黄灯「要露脸出镜，帮公司引流」', () => {
+  const r = buildRuleReport(HEAD + '招聘主播 月薪8000 需要露脸直播带货').report;
+  assert.ok(r.findings.some((f) => f.rule_id === 'R-WORK-A02'));
+});
+
 console.log('');
 console.log(pass + ' 项通过，' + fail + ' 项失败');
 if (fail) process.exit(1);

@@ -156,6 +156,22 @@ export function isRecruitText(text) {
 
 // ---- 3. 证据 ----
 // 证据取「包含关键词的那一行原文」；行太长就截到关键词附近 40 字。
+// 平台 / 产品名里的「微信」「QQ」：出现它们不代表对方只留了个人联系方式
+const PLATFORM_NAME_RE = /(?:微信|威信|薇信|V信|vx|VX)\s*(?:视频号|公众号|小程序|支付|朋友圈|小店|商城|生态|平台|读书|群运营|社群|端)|(?:QQ|qq)\s*(?:音乐|空间|邮箱|浏览器|飞车|炫舞)/g;
+
+// 按位置取证据：命中词可能在别处还以「平台名」的形式出现过，所以不能再按关键词从头找
+function evidenceAt(text, at, kw) {
+  const src = String(text || '');
+  if (at < 0) return evidenceOf(src, kw);
+  const lineStart = src.lastIndexOf('\n', at) + 1;
+  let lineEnd = src.indexOf('\n', at);
+  if (lineEnd < 0) lineEnd = src.length;
+  const line = src.slice(lineStart, lineEnd).trim();
+  if (line.length <= 60) return line;
+  const i = Math.max(0, at - lineStart - 20);
+  return src.slice(lineStart + i, lineStart + i + 60).trim();
+}
+
 export function evidenceOf(text, keyword) {
   const lines = String(text || '').split('\n');
   const kw = String(keyword || '');
@@ -183,40 +199,63 @@ const NEAR_DISTANCE = 12;
 // 注意不能带 /g：带 g 的正则在 replace/test 之间会保留 lastIndex，第二次调用就漏判。
 const NORMAL_PAY_CONTEXT = /缴纳?(五险一金|社保|公积金|个人所得税|个税)|五险一金|社保|公积金/;
 
+// 否定说法：「不收押金」「无需交任何费用」「免押金」是在说**不收钱**，不能当成收费。
+// 2026-11-11 实测：正常岗位写了「入职不收取任何费用」被判成红灯「入职前先收钱」，就是因为没看否定词。
+// 只认紧挨着的否定（中间最多隔一个常见虚词），避免「学历不限，需交押金」这种被误放过。
+const NEG_BEFORE_VERB = /(?:不|无需|无须|不用|不需要?|不必|没有|未|勿|拒绝|严禁|禁止|绝不|不会|不得|免)(?:再|向你|向您|额外|另外|另行|需要|用)?$/;
+const NEG_BEFORE_NOUN = /(?:免|无|零|0|没有|不收|不交|不需|无需|不用|不要)(?:任何|一切|所有)?$/;
+
 function hasChargeVerbNear(text, noun) {
-  const verbs = ['交', '缴', '付', '收', '自理', '收取', '缴纳', '垫付', '付费', '预交', '先付'];
+  const verbs = ['交', '缴', '付', '收', '扣', '自理', '收取', '缴纳', '垫付', '付费', '预交', '先付'];
   let from = 0;
   for (;;) {
     const idx = text.indexOf(noun, from);
     if (idx < 0) return false;
     from = idx + 1;
+    // 「免押金」「无任何押金」：名目本身被否定，这一处不算
+    if (NEG_BEFORE_NOUN.test(text.slice(Math.max(0, idx - 6), idx))) continue;
     const start = Math.max(0, idx - NEAR_DISTANCE);
     const near = text.slice(start, idx + noun.length + NEAR_DISTANCE);
     // 去掉「缴纳五险一金/社保」这类正常用法，剩下的才是真的在收钱
     const stripped = near.replace(NORMAL_PAY_CONTEXT, '');
-    if (verbs.some((v) => stripped.indexOf(v) >= 0)) return true;
+    // 附近要有一个**没被否定**的收费动词才算
+    const hit = verbs.some((v) => {
+      let at = stripped.indexOf(v);
+      while (at >= 0) {
+        if (!NEG_BEFORE_VERB.test(stripped.slice(Math.max(0, at - 6), at))) return true;
+        at = stripped.indexOf(v, at + 1);
+      }
+      return false;
+    });
+    if (hit) return true;
   }
 }
 
 // 命中：返回证据原文，没命中返回 null
+// require_all 的含义：外层每个组都要命中；组里的每一项（例如「收费名目」和「收费动词」）也都要命中。
+// 之前把组里的几项摊平成「任意一个词」，结果只要出现「交」「收」这类单字就会判成「入职前先收钱」。
 function matchKeywords(text, rule) {
   if (!rule.require_all || !rule.require_all.length) return null;
   let firstKw = '';
-  let chargeNoun = '';
   for (const group of rule.require_all) {
-    const terms = (group || []).map((g) => g.terms || []).flat();
-    const kw = terms.find((t) => t && text.indexOf(t) >= 0);
-    if (!kw) return null;
-    if (!firstKw) firstKw = kw;
-    // 收费名目那一组要按「就近」判定：只有名词附近出现收费动词才算真的在收钱
-    if (isChargeNounGroup(group)) chargeNoun = kw;
+    for (const entry of group || []) {
+      const terms = (entry && entry.terms) || [];
+      const present = terms.filter((t) => t && text.indexOf(t) >= 0);
+      if (!present.length) return null;
+      let kw = present[0];
+      // 收费名目那一项要按「就近」判定：名目附近出现没被否定的收费动词，才算真的在收钱
+      if (isChargeNounEntry(entry)) {
+        kw = present.find((n) => hasChargeVerbNear(text, n)) || '';
+        if (!kw) return null;
+      }
+      if (!firstKw) firstKw = kw;
+    }
   }
-  if (chargeNoun && !hasChargeVerbNear(text, chargeNoun)) return null;
   return evidenceOf(text, firstKw);
 }
 
-function isChargeNounGroup(group) {
-  const terms = (group || []).map((g) => g.terms || []).flat();
+function isChargeNounEntry(entry) {
+  const terms = (entry && entry.terms) || [];
   return terms.some((t) => /押金|保证金|费$/.test(t));
 }
 
@@ -286,9 +325,13 @@ const LOGIC = {
   no_company_with_contact(text, rule) {
     const hasCompany = (rule.company_terms || []).some((t) => text.indexOf(t) >= 0);
     if (hasCompany) return null;
-    const kw = (rule.contact_terms || []).find((t) => text.indexOf(t) >= 0);
+    // 「微信视频号」「微信公众号」「微信支付」「QQ 音乐」这类是平台或产品名，不是联系方式。
+    // 先把它们挖掉再找，否则「拍摄抖音、微信视频号」会被当成「只留个人微信」（2026-11-11 老板实测的误判）。
+    const masked = String(text).replace(PLATFORM_NAME_RE, (m) => '＃'.repeat(m.length));
+    const kw = (rule.contact_terms || []).find((t) => masked.indexOf(t) >= 0);
     if (!kw) return null;
-    return evidenceOf(text, kw);
+    const at = masked.indexOf(kw);
+    return evidenceAt(text, at, kw);
   },
   // 试用期超过 N 个月
   probation_months(text, rule) {

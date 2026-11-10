@@ -1,15 +1,12 @@
 <template>
   <view class="brand-row">
-    <view class="logo" :class="sizeClass" aria-hidden="true">
-      <view class="bar"></view>
-      <view class="bar"></view>
-    </view>
+    <image class="logo" :class="size" src="/static/mascot/brand.png" mode="aspectFit" aria-hidden="true" />
     <text v-if="showName" class="brand-name">{{ appName }}</text>
   </view>
 </template>
 
 <script setup>
-// 品牌标识：黄色圆角方块 + 两根深色竖条（暂停键），代表「等等」
+// 品牌标识：黄色圆角方块里的坑坑（土拨鼠）。2026-11-11 老板选定，替换原来的「暂停键」方块。
 import { APP_NAME } from '@/common/brand.js';
 
 defineOptions({ name: 'BrandMark' });
@@ -32,50 +29,19 @@ const appName = APP_NAME;
 .logo {
   width: 61rpx;
   height: 61rpx;
-  border-radius: 19rpx;
-  background-color: $cta;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
   margin-right: 19rpx;
   flex-shrink: 0;
 
   &.sm {
-    width: 46rpx;
-    height: 46rpx;
-    border-radius: 14rpx;
-    margin-right: 14rpx;
+    width: 54rpx;
+    height: 54rpx;
+    margin-right: 15rpx;
   }
 
   &.lg {
-    width: 88rpx;
-    height: 88rpx;
-    border-radius: 27rpx;
+    width: 96rpx;
+    height: 96rpx;
     margin-right: 0;
-  }
-}
-
-// 竖条 4×14 设计稿 → 8rpx×27rpx
-.bar {
-  width: 8rpx;
-  height: 27rpx;
-  border-radius: 4rpx;
-  background-color: $cta-ink;
-
-  &.sm,
-  .logo.sm & {
-    width: 6rpx;
-    height: 20rpx;
-  }
-
-  .logo.lg & {
-    width: 11rpx;
-    height: 38rpx;
-  }
-
-  & + & {
-    margin-left: 8rpx;
   }
 }
 

@@ -5,10 +5,7 @@
     <view class="main">
       <!-- 头像 + 昵称 + 免费/会员标识 -->
       <view class="profile">
-        <view class="avatar">
-          <view class="avatar-bar"></view>
-          <view class="avatar-bar"></view>
-        </view>
+        <image class="avatar" src="/static/mascot/brand.png" mode="aspectFit" />
         <view class="profile-info">
           <text class="name">{{ displayName }}</text>
           <view class="chip-row">
@@ -293,13 +290,8 @@ function gotoDev() {
 .avatar {
   width: 100rpx;
   height: 100rpx;
-  border-radius: 31rpx;
-  background-color: $cta;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
   margin-right: 23rpx;
+  flex-shrink: 0;
 }
 
 .avatar-bar {
