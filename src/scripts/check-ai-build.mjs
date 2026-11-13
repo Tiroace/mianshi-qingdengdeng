@@ -16,7 +16,7 @@ const DIST = process.argv[2] || 'dist/build/mp-weixin';
 // 「抖音用户」是抖音端的平台标签，微信提审包里不该出现任何抖音字样；
 // 构建时由 strip-upload-card.mjs 一并把这类跨端文案摘掉，这里只负责核对结果。
 const BANNED = ['内测', '抖音用户', '不得提审', '/community/'];
-const EXPECT_VERSION = '1.1.1';
+const EXPECT_VERSION = '1.1.2';
 
 function walk(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {

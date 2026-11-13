@@ -130,3 +130,67 @@ def test_ocr_prewarm_flag_is_read(monkeypatch):
     from backend.app.config import get_settings
 
     assert get_settings().ocr_prewarm is False
+
+
+# ---- 1.1.2：分块上传（云托管单次请求 ≤100KB）----
+def test_judge_chunked_upload(prod_client, monkeypatch):
+    monkeypatch.setenv("QBL_DEEPSEEK_KEY", "sk-test-only")
+    from backend.app.routers import judge as judge_mod
+
+    got = {}
+
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"text": "x", "hits": []}'}}]}
+
+    def fake_post(url, json, headers, timeout):  # noqa: A002
+        got["imgs"] = [c["image_url"]["url"].split(",", 1)[1] for c in json["messages"][1]["content"][1:]]
+        return _Resp()
+
+    monkeypatch.setattr(judge_mod.httpx, "post", fake_post)
+    tok = _silent_login(prod_client, "o-user-chunk")["token"]
+    big = base64.b64encode(PNG_1X1 * 3000).decode()  # 约 270KB base64，和真实压缩截图相当
+    size = 60 * 1024
+    parts = [big[i:i + size] for i in range(0, len(big), size)]
+    assert len(parts) > 1
+    for img in (0, 1):
+        for seq, data in enumerate(parts):
+            body = {"job": "job-12345678", "img": img, "seq": seq, "total": len(parts), "data": data}
+            r = prod_client.post("/judge/part", json=body, headers=auth(tok))
+            assert r.status_code == 200, r.text
+            # 每块请求体都必须 < 100KB
+            assert len(json_dumps(body)) < 100 * 1024
+    ok = prod_client.post("/judge", json={"job": "job-12345678", "count": 2}, headers=auth(tok))
+    assert ok.status_code == 200, ok.text
+    assert got["imgs"] == [big, big]
+    # 用完即删：再调一次同一个 job 必须失败
+    again = prod_client.post("/judge", json={"job": "job-12345678", "count": 2}, headers=auth(tok))
+    assert again.status_code == 400
+
+
+def test_judge_incomplete_job_rejected(prod_client, monkeypatch):
+    monkeypatch.setenv("QBL_DEEPSEEK_KEY", "sk-test-only")
+    tok = _silent_login(prod_client, "o-user-chunk2")["token"]
+    body = {"job": "job-abcdefgh", "img": 0, "seq": 0, "total": 2, "data": "AAAA"}
+    assert prod_client.post("/judge/part", json=body, headers=auth(tok)).status_code == 200
+    r = prod_client.post("/judge", json={"job": "job-abcdefgh", "count": 1}, headers=auth(tok))
+    assert r.status_code == 400
+
+
+def test_judge_part_is_per_user(prod_client, monkeypatch):
+    monkeypatch.setenv("QBL_DEEPSEEK_KEY", "sk-test-only")
+    a = _silent_login(prod_client, "o-user-a")["token"]
+    b = _silent_login(prod_client, "o-user-b")["token"]
+    body = {"job": "job-shared01", "img": 0, "seq": 0, "total": 1, "data": base64.b64encode(PNG_1X1).decode()}
+    assert prod_client.post("/judge/part", json=body, headers=auth(a)).status_code == 200
+    # 别人拿不到你的块
+    r = prod_client.post("/judge", json={"job": "job-shared01", "count": 1}, headers=auth(b))
+    assert r.status_code == 400
+
+
+def json_dumps(obj) -> str:
+    import json
+
+    return json.dumps(obj)

@@ -38,9 +38,36 @@ MAX_B64_CHARS = 600 * 1024
 
 _buckets: dict[str, collections.deque] = {}
 
+# ---- 1.1.2：分块上传 ----
+# 微信云托管 callContainer 单次请求体上限 100KB（errCode -606001），一张压缩后的截图
+# base64 就有 ~270KB，1.1.1 一次发整张图在真机上直接被微信拦下。
+# 现在手机把每张图切成 ≤60KB 的块，逐块 POST /judge/part，最后 POST /judge {job} 拼图识别。
+# 块只放在进程内存里：识别完立刻删，超时 5 分钟自动清，不落盘（隐私指引：服务器不保存截图）。
+# 注意：多副本时同一 job 的块可能落到不同实例，云托管最大副本数请保持 1（低流量阶段足够）。
+PART_MAX_CHARS = 90 * 1024
+MAX_PARTS_PER_IMAGE = 12
+JOB_TTL_SECONDS = 300
+_jobs: dict[tuple[str, str], dict] = {}
+
+
+def _gc_jobs() -> None:
+    cutoff = time.time() - JOB_TTL_SECONDS
+    for k in [k for k, v in _jobs.items() if v["ts"] < cutoff]:
+        _jobs.pop(k, None)
+
+
+class JudgePartRequest(BaseModel):
+    job: str = Field(min_length=8, max_length=64)
+    img: int = Field(ge=0, lt=MAX_IMAGES)
+    seq: int = Field(ge=0, lt=MAX_PARTS_PER_IMAGE)
+    total: int = Field(ge=1, le=MAX_PARTS_PER_IMAGE)
+    data: str = Field(min_length=1, max_length=PART_MAX_CHARS)
+
 
 class JudgeRequest(BaseModel):
-    images: list[str] = Field(default_factory=list, description="压缩后的 JPEG base64（不带 data: 前缀），1-3 张")
+    images: list[str] = Field(default_factory=list, description="压缩后的 JPEG base64（不带 data: 前缀），1-3 张（仅本地联调用，云托管会超 100KB）")
+    job: str = Field(default="", max_length=64, description="分块上传的任务号（1.1.2 起手机端走这个）")
+    count: int = Field(default=0, ge=0, le=MAX_IMAGES, description="分块上传的图片张数")
 
 
 @lru_cache(maxsize=1)
@@ -117,12 +144,50 @@ def _call_deepseek(images: list[str]) -> dict:
     return {"raw": out, "usage": body.get("usage")}
 
 
+@router.post("/judge/part")
+def judge_part(body: JudgePartRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    """接收一块截图 base64。块只存内存，5 分钟没用上自动清掉。"""
+    _gc_jobs()
+    key = (user["id"], body.job)
+    job = _jobs.get(key)
+    if job is None:
+        # 每人同时最多 3 个未完成任务，防止拿内存刷
+        if sum(1 for k in _jobs if k[0] == user["id"]) >= 3:
+            raise AppError("RATE_LIMITED", "上传太频繁，请稍后再试", 429)
+        job = {"ts": time.time(), "imgs": {}}
+        _jobs[key] = job
+    parts = job["imgs"].setdefault(body.img, {"total": body.total, "parts": {}})
+    if parts["total"] != body.total:
+        raise AppError("VALIDATION_ERROR", "分块数量不一致", 400)
+    parts["parts"][body.seq] = body.data
+    job["ts"] = time.time()
+    return envelope({"ok": True}, request)
+
+
+def _assemble(user_id: str, job_id: str, count: int) -> list[str]:
+    _gc_jobs()
+    job = _jobs.pop((user_id, job_id), None)
+    if job is None:
+        raise AppError("VALIDATION_ERROR", "截图没传完整，请重试", 400)
+    images: list[str] = []
+    for i in range(count):
+        item = job["imgs"].get(i)
+        if not item or len(item["parts"]) != item["total"]:
+            raise AppError("VALIDATION_ERROR", "截图没传完整，请重试", 400)
+        images.append("".join(item["parts"][k] for k in range(item["total"])))
+    return images
+
+
 @router.post("/judge")
 def judge(body: JudgeRequest, request: Request, user: dict = Depends(current_user)) -> dict:
     """截图 → DeepSeek → 原始 JSON。不扣次数（扣次数仍走 /quota/consume）。"""
     settings = get_settings()
+    if body.job:
+        raw_images = _assemble(user["id"], body.job, body.count or 0)
+    else:
+        raw_images = body.images
     if not settings.deepseek_key:
         raise AppError("UPSTREAM_ERROR", "识图服务未配置", 503)
-    images = _validate_images(body.images)
+    images = _validate_images(raw_images)
     _check_rate(user["id"], settings.judge_per_minute)
     return envelope(_call_deepseek(images), request)

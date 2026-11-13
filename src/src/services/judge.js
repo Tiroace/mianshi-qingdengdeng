@@ -40,10 +40,43 @@ function withTimeout(promise, ms) {
   });
 }
 
+// 1.1.2：云托管 callContainer 单次请求体上限 100KB（errCode -606001）。
+// 一张压缩后的截图 base64 约 270KB，1.1.1 一次整包发送在真机上被微信直接拦下。
+// 现在把每张图切成 ≤60KB 的块，逐块 POST /judge/part，最后 POST /judge {job, count} 让服务器拼图识别。
+const PART_CHARS = 60 * 1024;
+
+function newJobId() {
+  return 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+async function uploadParts(job, images) {
+  const tasks = [];
+  images.forEach((b64, img) => {
+    const total = Math.max(1, Math.ceil(b64.length / PART_CHARS));
+    for (let seq = 0; seq < total; seq += 1) {
+      tasks.push({ job, img, seq, total, data: b64.slice(seq * PART_CHARS, (seq + 1) * PART_CHARS) });
+    }
+  });
+  // 同时最多 3 个请求，块多时也不会把网络挤满
+  let next = 0;
+  const worker = async () => {
+    while (next < tasks.length) {
+      const t = tasks[next];
+      next += 1;
+      // eslint-disable-next-line no-await-in-loop
+      await request('/judge/part', 'POST', t);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+}
+
 // 调服务器 /judge：images 是 base64 数组（1-3 张）
 export function judgeImages(images, { timeout = JUDGE_TIMEOUT } = {}) {
   if (!images || !images.length) return Promise.reject(new Error('NO_IMAGE'));
-  return withTimeout(request('/judge', 'POST', { images: images.slice(0, 3) }), timeout).then((data) => {
+  const list = images.slice(0, 3);
+  const job = newJobId();
+  const run = uploadParts(job, list).then(() => request('/judge', 'POST', { job, count: list.length }));
+  return withTimeout(run, timeout).then((data) => {
     const raw = data && data.raw;
     if (!raw || typeof raw !== 'object') throw new Error('BAD_JSON');
     return { raw, usage: (data && data.usage) || null };

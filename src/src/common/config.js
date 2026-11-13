@@ -34,7 +34,8 @@ export const CLOUD_SERVICE =
 // DeepSeek 识图判断：1.1.1 起改由服务器 POST /judge 转发，密钥只在云托管环境变量里。
 // 1.1.0 曾在构建时把 VITE_DEEPSEEK_KEY 注入这里，结果密钥明文进了小程序包——不许再加回来。
 // 服务器转发比直连多一跳，给 20 秒上限，超时即退回旧流程。
-export const JUDGE_TIMEOUT = 20000;
+// 1.1.2 分块上传多了几次往返，总时限放到 30 秒。
+export const JUDGE_TIMEOUT = 30000;
 // 本地识图路径的标识，便于核对线上跑的是哪条路径
 export const LOCAL_RULES_VERSION = 'v3.0+ds';
 export const LOCAL_ENGINE = 'deepseek';

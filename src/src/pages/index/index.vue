@@ -158,7 +158,7 @@ import { buildRuleReport } from '@/services/rules.js';
 import { DEEPSEEK_MAX_IMAGES, MIN_OCR_CHARS, QUOTA_RULES, VISION_ENGINE } from '@/common/config.js';
 import { runRewardedFlow, canTriggerAd } from '@/common/adGuard.js';
 import { canBuyMember, isMembershipVisible } from '@/common/entitlement.js';
-import { getAdUnitId } from '@/common/config.js';
+import { getAdUnitId, hasCloudBackend } from '@/common/config.js';
 import { isUnlimitedEnv } from '@/common/env.js';
 import { saveHistory } from '@/services/history.js';
 import { reportStats } from '@/services/stats.js';
@@ -505,7 +505,14 @@ async function runLocalThenFallback() {
     uni.navigateTo({ url: '/pages/report/index?local=1' });
     return;
   }
-  // 退回服务器流程
+  // 1.1.2：走云托管时不退回服务器认字流程。那条路一次上传整张图（~270KB），
+  // 超过 callContainer 100KB 上限（-606001），用户只会看到一串英文报错。
+  if (hasCloudBackend()) {
+    submitting.value = false;
+    uni.showToast({ title: '这次没查成，次数没扣，请稍后再试', icon: 'none', duration: 3000 });
+    return;
+  }
+  // 退回服务器流程（仅本地联调 / 公网直连时）
   ensureLogin()
     .then(() => uploadAll(paths))
     .then((imageIds) =>
