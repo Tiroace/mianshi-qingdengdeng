@@ -131,4 +131,39 @@ function main() {
   return 0;
 }
 
+// ---- AI 版提审包：摘掉跨端文案 ----
+// 「抖音用户」是抖音端的平台标签。微信提审包里出现抖音字样没有意义，
+// 而且 AI版上架令第六节第 2 条把它列为必须为 0 的禁用词。
+// 只改产物、不改源码：源码里这个标签对抖音端仍然有效。
+function stripCrossPlatform() {
+  const changes = [];
+  for (const file of walk(DIST)) {
+    if (!/\.(js|wxml)$/.test(file)) continue;
+    let raw;
+    try {
+      raw = fs.readFileSync(file, 'utf8');
+    } catch (e) {
+      continue;
+    }
+    let next = raw;
+    // douyin: '抖音用户' → douyin: '用户'（保留 key，避免取值变 undefined）
+    next = next.replace(/抖音用户/g, '用户');
+    if (next !== raw) {
+      fs.writeFileSync(file, next, 'utf8');
+      changes.push(path.relative(DIST, file));
+    }
+  }
+  if (changes.length) {
+    console.log('AI 版清理跨端文案（抖音用户 → 用户）：');
+    changes.forEach((c) => console.log('  · ' + c));
+  }
+  console.log('[OK] AI 版跨端文案检查完成');
+  return 0;
+}
+
+const mode = process.argv[3] || '';
+if (mode === 'cross-platform') {
+  process.exit(stripCrossPlatform());
+}
+
 process.exit(main());

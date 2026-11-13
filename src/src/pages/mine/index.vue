@@ -139,10 +139,16 @@ const redCount = computed(() => Number((user.value && user.value.red_count) || 0
 const displayName = computed(() => {
   const u = user.value;
   if (!u) return '未登录';
-  // 拿不到平台昵称时按**当前运行平台**给兜底文案，不能写死「抖音用户」——
-  // 微信版里显示「抖音用户」是明显错误。平台取自 detectPlatform()。
+  // 1.1.0（AI版上架令第二节前端第 3 条）：「微信用户 · 编号后 4 位」。
+  // 这一版不做设置头像昵称（会多一项隐私声明），所以不读 nickname。
+  // 拿不到平台昵称时按**当前运行平台**给兜底文案，不能写死「抖音用户」。
   const fallback = PLATFORM_LABELS[detectPlatform().platform] || '用户';
-  return u.nickname || u.nick_name || fallback;
+  const uid = String(u.user_id || '');
+  const tail = uid.length >= 4 ? uid.slice(-4) : uid;
+  if (!tail) return fallback;
+  // 平台前缀（weixin → 微信用户）
+  const prefix = u.platform === 'weixin' ? '微信用户' : fallback;
+  return prefix + ' · ' + tail;
 });
 
 const vipStripText = computed(() => {

@@ -56,6 +56,51 @@ def grant_register_bonus(conn: sqlite3.Connection, user_id: str, amount: int) ->
     return True
 
 
+# ---- 1.1.0：每天补足（AI版上架令 3.3） ----
+def beijing_day() -> str:
+    """北京日期（UTC+8）。补足按北京日期结算，不用容器本地时区，避免时区漂移。"""
+    return (dt.datetime.utcnow() + dt.timedelta(hours=8)).strftime("%Y-%m-%d")
+
+
+def topup_daily(conn: sqlite3.Connection, user_id: str, target: int) -> dict:
+    """每天第一次打开时，余额不足 target 就补到 target。
+
+    幂等键 `daily:{user_id}:{北京日期}`，一天只补一次（重复调用不再发）。
+    target <= 0 表示关闭补足（开广告后运维把 QBL_DAILY_TOPUP 改成 0）。
+    返回 {granted, amount, balance}：amount 是这次补了几次。
+    """
+    if target is None or int(target) <= 0:
+        return {"granted": False, "amount": 0, "balance": balance(conn, user_id)}
+    key = f"daily:{user_id}:{beijing_day()}"
+    if has_idem(conn, key):
+        return {"granted": False, "amount": 0, "balance": balance(conn, user_id)}
+    current = balance(conn, user_id)
+    need = int(target) - current
+    if need <= 0:
+        # 余额已经够，也记一条 0 的流水占位，保证当天不再重复判断
+        append(conn, user_id, 0, "daily_topup", ref=user_id, idem_key=key)
+        return {"granted": False, "amount": 0, "balance": current}
+    append(conn, user_id, need, "daily_topup", ref=user_id, idem_key=key)
+    return {"granted": True, "amount": need, "balance": current + need}
+
+
+def consume_once(conn: sqlite3.Connection, user_id: str, idempotency_key: str) -> dict:
+    """手机端检查完成后扣 1 次（AI版上架令 3.4）。
+
+    - 幂等：同一个 key（用报告编号）重复调用不重复扣。
+    - 余额不足返回 granted=False + reason='exhausted'，不抛错，由前端决定怎么提示。
+    - 只在「出了有效报告」时调用；「不是招聘内容」不调用。
+    """
+    key = f"consume:{user_id}:{idempotency_key}"
+    if has_idem(conn, key):
+        return {"granted": False, "reason": "duplicate", "balance": balance(conn, user_id)}
+    current = balance(conn, user_id)
+    if current < 1:
+        return {"granted": False, "reason": "exhausted", "balance": current}
+    append(conn, user_id, -1, "analysis_consume", ref=idempotency_key, idem_key=key)
+    return {"granted": True, "reason": "ok", "balance": current - 1}
+
+
 def hold_for_analysis(conn: sqlite3.Connection, user_id: str, task_id: str) -> int:
     """预扣 1 次；余额不足抛 QUOTA_EXHAUSTED。返回预扣后余额。"""
     current = balance(conn, user_id)

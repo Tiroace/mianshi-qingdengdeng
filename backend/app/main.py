@@ -24,16 +24,21 @@ from .errors import AppError
 from .community.sensitive_seed import seed_sensitive_words
 from .logging_setup import RETENTION_DAYS, setup_logging
 from .patterns_seed import seed_patterns
-from .routers import ad, admin, analysis, auth, community, feedback, orders, patterns, stats
+from .routers import ad, admin, analysis, auth, community, feedback, orders, patterns, quota, stats
 
 # R-04：日志落盘 + 按天轮转、保留 180 天（原来是 console-only，进程一停就没了）
 LOG_PATH = setup_logging(get_settings().project_root)
 logger = logging.getLogger("qbl")
 
+# 接口文档关闭（AI版上架令第二节第 4 条）：生产环境不暴露 /docs、/redoc 与 openapi.json，
+# 少一个被扫描面。开发环境也一并关掉，需要看契约就去看 docs/04。
 app = FastAPI(
     title="面试请等等 · 后端 API（原型）",
     version="0.1.0",
     description="字段级契约见 docs/04-后端接口契约.md；统一响应封套 {ok, data, request_id}。",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # CORS：只放本机开发来源（微信开发者工具 / 浏览器调试），绝不开 *
@@ -53,6 +58,8 @@ app.include_router(orders.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
 app.include_router(patterns.router)
+# 额度：手机端检查完成后扣次数（AI版上架令第三节第 4 条）
+app.include_router(quota.router)
 # 匿名统计（老板 2026-11-04 定）：上报不需要登录，只收结论与套路编号
 app.include_router(stats.router)
 app.include_router(community.router)

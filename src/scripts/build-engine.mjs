@@ -40,10 +40,14 @@ const UNI_JS = 'node_modules/@dcloudio/vite-plugin-uni/bin/uni.js';
 const extra = IS_REVIEW ? ['review'] : [];
 // 规则版：清掉「上传卡」组件产物（规则版只有粘贴卡）。必须在 postbuild-check 之前跑，
 // 让它能对清理后的产物做最后的词表核对。
+// AI 版提审包：同一脚本的 cross-platform 模式，把「抖音用户」这类跨端文案摘掉
+// （AI版上架令第六节第 2 条把它列为必须为 0 的禁用词）。
 const stripUpload =
   engine === 'rules'
     ? [[process.execPath, ['scripts/strip-upload-card.mjs', 'dist/build/mp-weixin']]]
-    : [];
+    : IS_REVIEW
+      ? [[process.execPath, ['scripts/strip-upload-card.mjs', 'dist/build/mp-weixin', 'cross-platform']]]
+      : [];
 const steps = [
   [process.execPath, [UNI_JS, 'build', '-p', 'mp-weixin']],
   [process.execPath, ['scripts/strip-dev-build.mjs', 'dist/build/mp-weixin'].concat(extra)],
@@ -92,6 +96,14 @@ if (failed) process.exit(process.exitCode || 1);
 // 规则版必须跑产物自检；失败就红，不许带着 deepseek 字样去提审
 if (engine === 'rules') {
   const c = spawnSync(process.execPath, ['scripts/check-rules-build.mjs', 'dist/build/mp-weixin'], {
+    stdio: 'inherit',
+  });
+  process.exit(c.status || 0);
+}
+
+// AI 版提审包：跑专属自检（禁用词、wx.cloud.init、版本号三处一致）
+if (engine === 'deepseek' && IS_REVIEW) {
+  const c = spawnSync(process.execPath, ['scripts/check-ai-build.mjs', 'dist/build/mp-weixin'], {
     stdio: 'inherit',
   });
   process.exit(c.status || 0);

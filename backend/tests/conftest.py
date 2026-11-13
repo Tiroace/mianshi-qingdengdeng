@@ -50,8 +50,23 @@ def client(tmp_path, monkeypatch):
     worker.shutdown(wait=True)
 
 
-def login(client, code: str | None = None, platform: str = "toutiao") -> dict:
-    resp = client.post("/auth/login", json={"platform": platform, "code": code or f"code-{uuid.uuid4().hex[:8]}"})
+def login(client, code: str | None = None, platform: str = "toutiao", openid: str | None = None) -> dict:
+    """登录测试辅助。
+
+    AI版上架令第二节第 1 条：生产环境只认云托管注入的 `X-WX-OPENID` 头，不再走 code2session。
+    所以 QBL_ENV=prod 的测试必须带这个头，否则会被正确拒绝（401）。
+    这里按当前环境自动带上，让「生产环境的其他行为」仍然可测。
+    """
+    import os
+
+    headers = {}
+    if os.environ.get("QBL_ENV", "dev").strip().lower() in ("prod", "production", "生产"):
+        headers["X-WX-OPENID"] = openid or f"wx-{uuid.uuid4().hex[:12]}"
+    resp = client.post(
+        "/auth/login",
+        json={"platform": platform, "code": code or f"code-{uuid.uuid4().hex[:8]}"},
+        headers=headers,
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()["data"]
 

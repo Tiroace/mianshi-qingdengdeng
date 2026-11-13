@@ -145,8 +145,8 @@ import QuotaSheet from '@/components/QuotaSheet.vue';
 // 别名指向一个空组件（UploadCard.stub.vue），所以规则版产物里不会出现
 // 「点这里选截图」这类上传文案——自检脚本会逐词核对。
 import UploadCard from '@/components/UploadCard.vue';
-import { ensureLogin, getUser, refreshUser } from '@/services/session.js';
-import { createAnalysis, uploadImage, claimAdReward, newRequestId, ApiError } from '@/services/api.js';
+import { ensureLogin, getUser, refreshUser, silentLogin, isAdmin } from '@/services/session.js';
+import { createAnalysis, uploadImage, claimAdReward, newRequestId, ApiError, consumeQuota, topupDaily } from '@/services/api.js';
 // 改造令 §〇：截图直发 DeepSeek 识图（失败静默退回上面的服务器流程）
 // 双版本令第三节：规则版不得包含 DeepSeek 相关代码。做法是在 vite.config.js 里把整个
 // judge.js 换成空实现（引擎为 rules 时），规则版包里因此不会出现提示词、接口地址和模型名；
@@ -237,13 +237,21 @@ onMounted(() => {
     balance.value = isUnlimitedEnv() ? 999999 : localFreeLeft();
     return;
   }
-  ensureLogin()
-    .then((u) => {
-      syncUser(u);
-      return refreshUser();
-    })
-    .then(syncUser)
-    .catch(() => {});
+  // AI 版：启动时静默登录（AI版上架令第二节前端第 1、2 条）。
+  // **刻意不 await**：登录在后台跑，不阻塞首页；5 秒没回来就按未登录继续用。
+  // 首页先用本地次数渲染，登录回来后由 syncUser 覆盖。
+  balance.value = isUnlimitedEnv() ? 999999 : localFreeLeft();
+  silentLogin().then((u) => {
+    if (!u) return; // 失败/超时：按未登录，什么都不做，不弹错
+    syncUser(u);
+    // 登录成功后补足当日次数（广告开通前 QBL_DAILY_TOPUP>0 才生效）
+    if (!isUnlimitedEnv() && !isAdmin()) {
+      topupDaily()
+        .then(() => refreshUser())
+        .then(syncUser)
+        .catch(() => {});
+    }
+  });
 });
 
 onShow(() => {

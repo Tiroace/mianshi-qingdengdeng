@@ -91,6 +91,14 @@ class Settings:
     # 开发登录通道（code=mock 直接换 token）：默认关，仅本地联调用 QBL_DEV_MODE=1 打开
     dev_mode: bool = field(default_factory=lambda: os.environ.get("QBL_DEV_MODE", "0") == "1")
 
+    # ---- 1.1.0 AI 版 ----
+    # 管理员 openid 白名单（逗号分隔）：正式版也不限次数、不看广告（AI版上架令 3.3）
+    admin_openids: str = field(default_factory=lambda: os.environ.get("QBL_ADMIN_OPENIDS", "").strip())
+    # 广告开通前：每天第一次打开时，余额不足这个数就补到这个数。开广告后改成 0。
+    daily_topup: int = field(default_factory=lambda: _env_int("QBL_DAILY_TOPUP", 3))
+    # 启动时是否预热 OCR。1.1.0 服务器不再认字，云容器可以关掉省内存/省冷启动时间
+    ocr_prewarm: bool = field(default_factory=lambda: os.environ.get("QBL_OCR_PREWARM", "1") == "1")
+
     # 求助广场（D14：默认关闭，资质核实后再开）
     feature_community: bool = field(default_factory=lambda: os.environ.get("QBL_FEATURE_COMMUNITY", "0") == "1")
     community_new_account_hours: int = field(default_factory=lambda: _env_int("QBL_COMMUNITY_NEW_ACCOUNT_HOURS", 24))

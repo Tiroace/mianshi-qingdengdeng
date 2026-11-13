@@ -40,7 +40,8 @@
     </view>
 
     <view class="up-meta">
-      <text v-if="isUnlimited">内测期间不限次数</text>
+      <!-- 1.1.0：正式提审包里不能出现这类测试期措辞（AI版上架令第六节第 2 条硬检查） -->
+      <text v-if="isUnlimited">现在免费，不限次数</text>
       <text v-else>还能免费查 <text class="up-meta-num">{{ balance }}</text> 次</text>
       <text>没查出结果，不扣次数</text>
     </view>

@@ -211,6 +211,20 @@ export function fetchMemberPlans() {
   return request('/plans').then((d) => (d && d.plans) || []);
 }
 
+// ---- 1.1.0：手机端检查完成后的次数接口（AI版上架令第三节第 4 条）----
+// 检查在手机上完成，不走原来的任务流程，所以要一个轻接口把次数落到服务端。
+// 失败不拦用户：调用方 catch 掉、先记本地，下次启动补报。
+
+// POST /quota/consume —— 出了有效报告才调；「不是招聘内容」不调
+export function consumeQuota(idempotencyKey) {
+  return request('/quota/consume', 'POST', { idempotency_key: idempotencyKey || '' });
+}
+
+// POST /quota/topup —— 每天第一次打开时补足次数（广告开通前）
+export function topupDaily() {
+  return request('/quota/topup', 'POST', {});
+}
+
 
 // 求助广场的接口已整体挪到 services/community.js（广场下架令 2026-11-10），
 // 这里不再导出，提审包里因此不会出现 /community/ 与广场相关字样。
@@ -225,6 +239,8 @@ export default {
   createOrder,
   submitFeedback,
   fetchMemberPlans,
+  consumeQuota,
+  topupDaily,
   getToken,
   setToken,
   clearToken,

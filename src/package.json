@@ -22,7 +22,9 @@
     "build:rules": "node scripts/build-engine.mjs rules",
     "build:rules:review": "node scripts/build-engine.mjs rules review",
     "build:deepseek": "node scripts/build-engine.mjs deepseek",
-    "check:rules:build": "node scripts/check-rules-build.mjs dist/build/mp-weixin"
+    "build:deepseek:review": "node scripts/build-engine.mjs deepseek review",
+    "check:rules:build": "node scripts/check-rules-build.mjs dist/build/mp-weixin",
+    "check:ai:build": "node scripts/check-ai-build.mjs dist/build/mp-weixin"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-4060620250520001",
