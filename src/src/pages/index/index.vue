@@ -213,8 +213,15 @@ function syncUser(user) {
     if (user.ad.daily_cap) adCap.value = Number(user.ad.daily_cap);
     if (typeof user.ad.remaining_today === 'number') adRemaining.value = Number(user.ad.remaining_today);
   }
-  // 本地识图路径可用时，次数以本地为准：否则会出现「显示 3 次、实际已用掉」的矛盾
-  if (isVisionJudgeAvailable()) balance.value = localFreeLeft();
+  // AI 版已登录：次数以服务端为准并同步到本地（1.1.1）。
+  // 1.1.0 一律取本地，本地 3 次用完就永远是 0，服务端每天补足到不了用户手里。
+  if (VISION_ENGINE && user.quota && typeof user.quota.balance === 'number') {
+    setLocalFreeLeft(Number(user.quota.balance));
+    balance.value = Number(user.quota.balance);
+  } else if (isVisionJudgeAvailable()) {
+    // 未登录：只能按本地算，避免「显示 3 次、实际已用掉」的矛盾
+    balance.value = localFreeLeft();
+  }
   // 规则版：没有服务器，次数一律取本地
   if (!VISION_ENGINE) balance.value = localFreeLeft();
   // 开发版/体验版不限次数：模板用 isUnlimited 显示「内测期间不限次数」，
@@ -325,8 +332,8 @@ function onPickOrStart() {
   }
   // 本地识图路径可用时次数以本地为准
   const left = localPathActive() ? localFreeLeft() : balance.value;
-  // 开发版/体验版不限次数：不拦、不弹「次数用完」
-  if (!isUnlimitedEnv() && left <= 0) {
+  // 开发版/体验版、管理员不限次数：不拦、不弹「次数用完」
+  if (!isUnlimitedEnv() && !isAdmin() && left <= 0) {
     showQuota.value = true;
     return;
   }
@@ -466,7 +473,18 @@ async function runLocalThenFallback() {
   if (local && local.report) {
     submitting.value = false;
     // 扣次数：只扣真正做了检查的（is_job_posting=false 不扣）
-    if (local.report.is_job_posting) setLocalFreeLeft(localFreeLeft() - 1);
+    if (local.report.is_job_posting) {
+      setLocalFreeLeft(localFreeLeft() - 1);
+      // 1.1.1：次数同时落到服务端（1.1.0 写了 consumeQuota 但没调用，重装就能重置次数）。
+      // 管理员由服务端免扣；失败不拦用户，报告照常显示。
+      consumeQuota(newRequestId())
+        .then((r) => {
+          if (!r || typeof r.balance !== 'number' || isUnlimitedEnv() || isAdmin()) return;
+          setLocalFreeLeft(r.balance);
+          balance.value = r.balance;
+        })
+        .catch(() => {});
+    }
     const meta = local.meta || {};
     // 存本地检查记录（7 天 / 50 条，不存截图）
     saveHistory(local.report, {
@@ -579,7 +597,11 @@ function onWatchAd() {
       if (res.fallback) result = 'no_fill';
       else if (!res.watched) result = 'error';
       return claimAdReward({ requestId, adUnitId: getAdUnitId(), result }).then((data) => {
-        if (data.quota && typeof data.quota.balance === 'number') balance.value = data.quota.balance;
+        if (data.quota && typeof data.quota.balance === 'number') {
+          balance.value = data.quota.balance;
+          // 1.1.1：本地路径按本地次数放行，看完广告必须同步到本地，否则到账了仍被拦
+          setLocalFreeLeft(data.quota.balance);
+        }
         if (typeof data.remaining_today === 'number') adRemaining.value = data.remaining_today;
         if (data.granted) {
           uni.showToast({ title: res.fallback ? '广告没加载出来，已送你 1 次' : '已增加 1 次', icon: 'none' });

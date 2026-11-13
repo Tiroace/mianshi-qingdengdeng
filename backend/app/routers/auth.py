@@ -109,6 +109,8 @@ def login(body: LoginRequest, request: Request) -> dict:
         adapter = None
         dev_code = False
     else:
+        if not (body.code or "").strip():
+            raise AppError("VALIDATION_ERROR", "缺少登录 code", 400)
         dev_code = body.code == "mock" or body.code.startswith("mock:")
         if dev_code:
             if not settings.dev_mode:

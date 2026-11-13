@@ -41,19 +41,19 @@ export default defineConfig(({ command, mode }) => {
   //   $env:VITE_CLOUD_ENV="prod-xxx"; $env:VITE_CLOUD_SERVICE="qbl-api"; npm run build:mp-weixin
   const cloudEnv = String(process.env.VITE_CLOUD_ENV || '').trim();
   const cloudService = String(process.env.VITE_CLOUD_SERVICE || '').trim();
-  // DeepSeek 密钥：只从环境变量注入，绝不写进代码/仓库（仓库是公开的）
+  // 1.1.1：DeepSeek 密钥一律不进小程序包（1.1.0 注入后明文出现在 common/config.js）。
+  // 密钥只放云托管环境变量 QBL_DEEPSEEK_KEY，由服务器 /judge 转发。
   const deepseekKey = String(process.env.VITE_DEEPSEEK_KEY || '').trim();
+  if (deepseekKey) {
+    throw new Error(
+      '不允许设置 VITE_DEEPSEEK_KEY：密钥会被打进小程序包。' +
+        '请清掉该环境变量；密钥改配到云托管的 QBL_DEEPSEEK_KEY。'
+    );
+  }
   // 引擎开关（双版本令第三节）：一套代码出两个包。
   //   不设 / 其它值 → rules（规则版，默认，提审用这一版）
   //   deepseek     → DeepSeek 识图版（只能内部测试，不得提审）
   const engine = String(process.env.VITE_ENGINE || '').trim() === 'deepseek' ? 'deepseek' : 'rules';
-  // 规则版红线：构建时看到密钥就直接报错退出，不指望「反正用不到」
-  if (engine === 'rules' && deepseekKey) {
-    throw new Error(
-      '规则版构建时不允许存在 VITE_DEEPSEEK_KEY（当前有值）。' +
-        '规则版不得包含任何密钥：先清掉该环境变量再构建。'
-    );
-  }
   return {
     plugins: [uni({ pagesJsonPath: resolvePagesJson() })],
     // 规则版把 judge.js 换成本地空实现：包体里不留提示词、接口地址和模型名。
@@ -70,7 +70,6 @@ export default defineConfig(({ command, mode }) => {
       __QBL_API_BASE_URL__: JSON.stringify(apiBase),
       __QBL_CLOUD_ENV__: JSON.stringify(cloudEnv),
       __QBL_CLOUD_SERVICE__: JSON.stringify(cloudService),
-      __QBL_DEEPSEEK_KEY__: JSON.stringify(deepseekKey),
       __QBL_ENGINE__: JSON.stringify(engine),
     },
     server: {

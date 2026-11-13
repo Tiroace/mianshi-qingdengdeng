@@ -16,7 +16,7 @@ const DIST = process.argv[2] || 'dist/build/mp-weixin';
 // 「抖音用户」是抖音端的平台标签，微信提审包里不该出现任何抖音字样；
 // 构建时由 strip-upload-card.mjs 一并把这类跨端文案摘掉，这里只负责核对结果。
 const BANNED = ['内测', '抖音用户', '不得提审', '/community/'];
-const EXPECT_VERSION = '1.1.0';
+const EXPECT_VERSION = '1.1.1';
 
 function walk(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -54,6 +54,29 @@ function main() {
       console.log('  [FAIL] 「' + w + '」出现在 ' + path.relative(DIST, hit));
     } else {
       console.log('  [OK]   无「' + w + '」');
+    }
+  }
+
+  // 1b. 密钥与直连地址（1.1.1）：1.1.0 把 DeepSeek 密钥明文打进了 common/config.js
+  console.log('');
+  console.log('①b 密钥（必须为 0）：');
+  const KEY_RULES = [
+    ['DeepSeek 密钥 sk-…', /sk-[A-Za-z0-9]{16,}/],
+    ['直连地址 api.deepseek.com', /api\.deepseek\.com/],
+  ];
+  for (const [label, re] of KEY_RULES) {
+    const hit = textFiles.find((f) => {
+      try {
+        return re.test(fs.readFileSync(f, 'utf8'));
+      } catch (e) {
+        return false;
+      }
+    });
+    if (hit) {
+      bad += 1;
+      console.log('  [FAIL] ' + label + ' 出现在 ' + path.relative(DIST, hit));
+    } else {
+      console.log('  [OK]   无' + label);
     }
   }
 

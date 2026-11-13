@@ -17,6 +17,7 @@ from ..config import get_settings
 from ..deps import current_user, envelope, get_db
 from ..errors import AppError
 from ..quota import balance, consume_once, topup_daily
+from .auth import _is_admin
 
 router = APIRouter(tags=["额度"])
 
@@ -34,6 +35,9 @@ def consume(body: ConsumeRequest, request: Request, user: dict = Depends(current
         raise AppError("VALIDATION_ERROR", "缺少 idempotency_key", 400)
     db = get_db()
     with db.transaction() as conn:
+        # 管理员（QBL_ADMIN_OPENIDS）不扣次数，服务端说了算，不靠前端自觉
+        if _is_admin(conn, user["id"], get_settings()):
+            return envelope({"granted": True, "reason": "admin", "balance": balance(conn, user["id"])}, request)
         result = consume_once(conn, user["id"], key)
     return envelope(result, request)
 

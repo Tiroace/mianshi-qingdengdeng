@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field
 
 class LoginRequest(BaseModel):
     platform: Literal["toutiao", "weixin"] = "toutiao"
-    code: str = Field(min_length=1, max_length=256, description="平台登录 code（wx.login / tt.login 拿到）")
+    # 1.1.1：允许空串。生产走云托管，身份来自 X-WX-OPENID 头，前端静默登录不带 code；
+    # 1.1.0 这里是 min_length=1，空 code 被 400 挡在路由外，静默登录永远失败。
+    # 非生产环境空 code 在路由里单独拒绝。
+    code: str = Field(default="", max_length=256, description="平台登录 code（wx.login / tt.login 拿到）；云托管生产可为空")
 
 
 class AdRewardRequest(BaseModel):

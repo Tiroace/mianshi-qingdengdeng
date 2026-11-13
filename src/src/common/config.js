@@ -7,7 +7,7 @@ import { detectPlatform } from '@/platform/detect.js';
 // - 生产构建（uni build -p mp-weixin）：默认空串，产物里不会出现内网地址
 // - 覆盖方式：$env:VITE_API_BASE_URL = "http://x.x.x.x:8000" 后再构建
 // 运行时再用本地存储 qiuzhibilei_api_base 覆盖（「开发自测」页）。
-/* global __QBL_API_BASE_URL__, __QBL_CLOUD_ENV__, __QBL_CLOUD_SERVICE__, __QBL_DEEPSEEK_KEY__, __QBL_ENGINE__ */
+/* global __QBL_API_BASE_URL__, __QBL_CLOUD_ENV__, __QBL_CLOUD_SERVICE__, __QBL_ENGINE__ */
 
 // 引擎开关（老板 2026-11-05 双版本令第三节）：一套代码出两个包。
 //   VITE_ENGINE 不设或设成别的值 → 'rules'（规则版，全手机本地，提审用这一版）
@@ -31,18 +31,10 @@ export const CLOUD_ENV =
 export const CLOUD_SERVICE =
   typeof __QBL_CLOUD_SERVICE__ !== 'undefined' ? __QBL_CLOUD_SERVICE__ : '';
 
-// DeepSeek 识图判断（改造令 §〇）：密钥由 vite 构建时从 VITE_DEEPSEEK_KEY 注入，
-// **绝不写进代码或提交**（仓库是公开的）。为空则自动走服务器旧流程。
-export const DEEPSEEK_KEY =
-  typeof __QBL_DEEPSEEK_KEY__ !== 'undefined' ? __QBL_DEEPSEEK_KEY__ : '';
-export const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
-export const DEEPSEEK_MODEL = 'deepseek-flash';
-// 关思考模式后实测 2.4-2.7 秒；给 15 秒上限，超时即退回旧流程
-export const DEEPSEEK_TIMEOUT = 15000;
-// 关闭思考模式：实测单张 8.78s → 2.44-2.67s（reasoning_tokens=0），抄录与命中不变。
-// 这是唯一生效的写法——reasoning_effort=low、enable_thinking=false 都试过，均不生效。
-// 代价：关思考牺牲多少「抓真坑」的能力尚未用带答案的截图验证，见验收表。
-export const DEEPSEEK_THINKING = { type: 'disabled' };
+// DeepSeek 识图判断：1.1.1 起改由服务器 POST /judge 转发，密钥只在云托管环境变量里。
+// 1.1.0 曾在构建时把 VITE_DEEPSEEK_KEY 注入这里，结果密钥明文进了小程序包——不许再加回来。
+// 服务器转发比直连多一跳，给 20 秒上限，超时即退回旧流程。
+export const JUDGE_TIMEOUT = 20000;
 // 本地识图路径的标识，便于核对线上跑的是哪条路径
 export const LOCAL_RULES_VERSION = 'v3.0+ds';
 export const LOCAL_ENGINE = 'deepseek';

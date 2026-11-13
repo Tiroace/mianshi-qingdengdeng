@@ -6,7 +6,7 @@
 //   npm run build:deepseek        → DeepSeek 识图版（只能内部测试，不得提审）
 //
 // 为什么不用 cross-env：项目没装这个依赖，多一个包不值得；跨平台设置环境变量 Node 本身就够。
-// 规则版不许带密钥：这里主动把 VITE_DEEPSEEK_KEY 清掉再交给 vite（vite.config.js 里还有一道硬报错）。
+// 任何版本都不许带密钥：这里主动把 VITE_DEEPSEEK_KEY 清掉再交给 vite（vite.config.js 里还有一道硬报错）。
 import { spawnSync } from 'node:child_process';
 
 const engine = process.argv[2] === 'deepseek' ? 'deepseek' : 'rules';
@@ -16,13 +16,9 @@ const IS_REVIEW =
 
 const env = { ...process.env, VITE_ENGINE: engine };
 if (IS_REVIEW) env.QBL_BUILD_TARGET = 'review';
-if (engine === 'rules') {
-  // 规则版红线：绝不能有密钥进产物
-  delete env.VITE_DEEPSEEK_KEY;
-} else if (!env.VITE_DEEPSEEK_KEY) {
-  console.error('[FAIL] DeepSeek 版必须注入 VITE_DEEPSEEK_KEY（密钥只从环境变量来，不写代码）');
-  process.exit(2);
-}
+// 1.1.1：两个版本都绝不带密钥进产物。DeepSeek 版的密钥在服务器（QBL_DEEPSEEK_KEY），
+// 前端只调 /judge。这里主动清掉，vite.config.js 里还有一道硬报错。
+delete env.VITE_DEEPSEEK_KEY;
 
 console.log(
   '[engine] 构建引擎：' +

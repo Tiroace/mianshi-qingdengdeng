@@ -24,7 +24,7 @@ from .errors import AppError
 from .community.sensitive_seed import seed_sensitive_words
 from .logging_setup import RETENTION_DAYS, setup_logging
 from .patterns_seed import seed_patterns
-from .routers import ad, admin, analysis, auth, community, feedback, orders, patterns, quota, stats
+from .routers import ad, admin, analysis, auth, community, feedback, judge, orders, patterns, quota, stats
 
 # R-04：日志落盘 + 按天轮转、保留 180 天（原来是 console-only，进程一停就没了）
 LOG_PATH = setup_logging(get_settings().project_root)
@@ -60,6 +60,8 @@ app.include_router(admin.router)
 app.include_router(patterns.router)
 # 额度：手机端检查完成后扣次数（AI版上架令第三节第 4 条）
 app.include_router(quota.router)
+# 1.1.1：DeepSeek 识图改由服务器转发，密钥不再进小程序包
+app.include_router(judge.router)
 # 匿名统计（老板 2026-11-04 定）：上报不需要登录，只收结论与套路编号
 app.include_router(stats.router)
 app.include_router(community.router)
@@ -166,7 +168,8 @@ def _startup() -> None:
     # 避免第一个真实请求额外背加载时间。
     # 只在生产或显式打开时预热：测试套会反复起 app，每次加载 300MB 模型会把测试拖死。
     _settings = get_settings()
-    _warm = _settings.is_production or os.environ.get("QBL_OCR_WARMUP", "0") == "1"
+    # 1.1.1：QBL_OCR_PREWARM=0 时生产也不预热（1.1.0 加了开关但没接上，设了不生效）
+    _warm = (_settings.is_production and _settings.ocr_prewarm) or os.environ.get("QBL_OCR_WARMUP", "0") == "1"
     if _warm and (_settings.ocr_backend or "") not in ("", "sidecar"):
         if warmup_ocr(_settings):
             logger.info("OCR 模型已预热（后端=%s）", _settings.ocr_backend)

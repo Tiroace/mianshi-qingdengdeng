@@ -98,6 +98,12 @@ class Settings:
     daily_topup: int = field(default_factory=lambda: _env_int("QBL_DAILY_TOPUP", 3))
     # 启动时是否预热 OCR。1.1.0 服务器不再认字，云容器可以关掉省内存/省冷启动时间
     ocr_prewarm: bool = field(default_factory=lambda: os.environ.get("QBL_OCR_PREWARM", "1") == "1")
+    # DeepSeek 识图：1.1.1 起只在服务器上调，密钥只放云托管环境变量，绝不进小程序包
+    deepseek_key: str = field(default_factory=lambda: os.environ.get("QBL_DEEPSEEK_KEY", "").strip())
+    deepseek_model: str = field(default_factory=lambda: os.environ.get("QBL_DEEPSEEK_MODEL", "deepseek-flash").strip())
+    deepseek_timeout: int = field(default_factory=lambda: _env_int("QBL_DEEPSEEK_TIMEOUT", 15))
+    # 每人每分钟最多几次识图（防刷 DeepSeek 余额）
+    judge_per_minute: int = field(default_factory=lambda: _env_int("QBL_JUDGE_PER_MINUTE", 6))
 
     # 求助广场（D14：默认关闭，资质核实后再开）
     feature_community: bool = field(default_factory=lambda: os.environ.get("QBL_FEATURE_COMMUNITY", "0") == "1")

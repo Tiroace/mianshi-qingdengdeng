@@ -1,145 +1,52 @@
-// 截图直发 DeepSeek 识图：一次调用完成「认出文字 + 判断套路」。
+// 截图识图：一次调用完成「认出文字 + 判断套路」。
 //
-// 关键约束（改造令 §〇）：
-// - 截图压缩后以 base64 放进 image_url，最多 3 张；
-// - 不走 callContainer，直接 uni.request 到 api.deepseek.com（后台已加 request 合法域名）；
+// 1.1.1 起：手机不再直连 DeepSeek，也不再持有密钥（1.1.0 把密钥明文打进了包）。
+// 截图压缩后发到自己服务器 POST /judge，服务器带密钥调 DeepSeek，原样返回模型 JSON。
+// - 压缩复用云托管上传那套（≤200KB、长边 ≤1080），最多 3 张，避免撞 callContainer 请求体上限；
 // - 要求模型把截图文字完整抄进 text，前端用 text 校验 evidence，找不到就丢；
 // - 失败一律抛出，由上层静默退回服务器流程。
-import {
-  DEEPSEEK_KEY,
-  DEEPSEEK_URL,
-  DEEPSEEK_MODEL,
-  DEEPSEEK_TIMEOUT,
-  DEEPSEEK_THINKING,
-} from '@/common/config.js';
+import { JUDGE_TIMEOUT, hasRealBackend } from '@/common/config.js';
 import { PATTERN_IDS } from '@/common/patterns.js';
-// eslint-disable-next-line import/no-unresolved
-import { SYSTEM_PROMPT } from '@/common/prompt.js';
-
-// 模型只能从这里选编号；实测模型会自己编不存在的编号（如 P-BAIT-01），所以：
-// 1) prompt 里给精确清单 + 明说「不许编」；2) 返回后用 PATTERN_IDS 白名单过滤。
-// 提示词唯一来源：rules/prompt_v1.txt，由 scripts/gen_prompt.py 从 rules/patterns_v1.json 生成。
-// 前端不再自己拼清单——手写第二份一定漂移，漂移后模型能选的编号和校验白名单就对不上。
-function buildSystemPrompt() {
-  return SYSTEM_PROMPT;
-}
-
-// 图片压缩：长边 ≤ 1600、JPEG 质量 80，控制 base64 体积（≤500KB 量级）
-function compressImage(filePath, maxSide = 1600, quality = 80) {
-  const wx = globalThis.wx;
-  if (!wx) return Promise.resolve({ ok: false, reason: 'no-wx' });
-  return new Promise((resolve) => {
-    wx.getImageInfo({
-      src: filePath,
-      success: (info) => {
-        const scale = Math.min(1, maxSide / Math.max(info.width, info.height));
-        const w = Math.round(info.width * scale);
-        const h = Math.round(info.height * scale);
-        try {
-          const canvas = wx.createOffscreenCanvas({ type: '2d', width: w, height: h });
-          const ctx = canvas.getContext('2d');
-          const img = canvas.createImage();
-          img.onload = () => {
-            try {
-              ctx.drawImage(img, 0, 0, w, h);
-              const compressed = wx.canvasToTempFilePath
-                ? null
-                : null;
-              // 小程序里用 canvas 取 base64 更稳的是 canvas.toDataURL；不支持时退回原图
-              if (typeof canvas.toDataURL === 'function') {
-                const dataUrl = canvas.toDataURL('image/jpeg', quality / 100);
-                resolve({ ok: true, base64: String(dataUrl).split(',')[1] || '', width: w, height: h });
-                return;
-              }
-              resolve({ ok: false, reason: 'no-toDataURL' });
-            } catch (e) {
-              resolve({ ok: false, reason: 'draw-failed' });
-            }
-          };
-          img.onerror = () => resolve({ ok: false, reason: 'img-error' });
-          img.src = filePath;
-        } catch (e) {
-          resolve({ ok: false, reason: 'canvas-failed' });
-        }
-      },
-      fail: () => resolve({ ok: false, reason: 'info-failed' }),
-    });
-  });
-}
-
-// 读原图 base64（压缩失败时的兜底：优先保证能跑通，体积由调用方限制）
-function readAsBase64(filePath) {
-  const wx = globalThis.wx;
-  return new Promise((resolve) => {
-    if (!wx || typeof wx.getFileSystemManager !== 'function') return resolve(null);
-    try {
-      wx.getFileSystemManager().readFile({
-        filePath,
-        encoding: 'base64',
-        success: (res) => resolve(res.data || null),
-        fail: () => resolve(null),
-      });
-    } catch (e) {
-      resolve(null);
-    }
-  });
-}
+import { compressToBase64 } from '@/platform/image.js';
+import { request } from '@/services/api.js';
 
 export async function toBase64(filePath) {
-  const c = await compressImage(filePath);
-  if (c.ok && c.base64) return c.base64;
-  return readAsBase64(filePath);
+  try {
+    const img = await compressToBase64(filePath);
+    return (img && img.base64) || null;
+  } catch (e) {
+    return null;
+  }
 }
 
+// 只要接了真后端就可用；服务器没配密钥时 /judge 会报错，上层照旧退回旧流程
 export function isVisionJudgeAvailable() {
-  return !!DEEPSEEK_KEY;
+  return hasRealBackend();
 }
 
-// 调 DeepSeek：images 是 base64 数组（1-3 张）
-export function judgeImages(images, { timeout = DEEPSEEK_TIMEOUT } = {}) {
+function withTimeout(promise, ms) {
   return new Promise((resolve, reject) => {
-    if (!DEEPSEEK_KEY) return reject(new Error('NO_KEY'));
-    if (!images || !images.length) return reject(new Error('NO_IMAGE'));
-
-    const content = [{ type: 'text', text: '请识别并判断这些招聘截图。' }];
-    images.slice(0, 3).forEach((b64) => {
-      content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } });
-    });
-
-    uni.request({
-      url: DEEPSEEK_URL,
-      method: 'POST',
-      timeout,
-      header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + DEEPSEEK_KEY },
-      data: {
-        model: DEEPSEEK_MODEL,
-        temperature: 0,
-        max_tokens: 2000,
-        response_format: { type: 'json_object' },
-        // 关掉思考模式：实测 8-11 秒降到 2.4-2.7 秒，抄录与判断结果一致
-        thinking: DEEPSEEK_THINKING,
-        messages: [
-          { role: 'system', content: buildSystemPrompt() },
-          { role: 'user', content },
-        ],
+    const t = setTimeout(() => reject(new Error('TIMEOUT')), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
       },
-      success: (res) => {
-        if (res.statusCode !== 200) {
-          // 402 余额不足、401 密钥失效等：都交给上层退回旧流程
-          return reject(new Error('HTTP_' + res.statusCode));
-        }
-        try {
-          const body = res.data || {};
-          const choice = (body.choices || [])[0] || {};
-          const msg = choice.message || {};
-          const out = JSON.parse(msg.content || '{}');
-          resolve({ raw: out, usage: body.usage || null });
-        } catch (e) {
-          reject(new Error('BAD_JSON'));
-        }
-      },
-      fail: (err) => reject(new Error((err && err.errMsg) || 'NETWORK')),
-    });
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+// 调服务器 /judge：images 是 base64 数组（1-3 张）
+export function judgeImages(images, { timeout = JUDGE_TIMEOUT } = {}) {
+  if (!images || !images.length) return Promise.reject(new Error('NO_IMAGE'));
+  return withTimeout(request('/judge', 'POST', { images: images.slice(0, 3) }), timeout).then((data) => {
+    const raw = data && data.raw;
+    if (!raw || typeof raw !== 'object') throw new Error('BAD_JSON');
+    return { raw, usage: (data && data.usage) || null };
   });
 }
 
